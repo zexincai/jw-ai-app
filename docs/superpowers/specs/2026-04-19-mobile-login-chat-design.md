@@ -25,14 +25,16 @@ PC 端（app-jw-web）已完整实现：短信 + 滑块验证码登录、WUKONGI
 | 设备指纹 | `tweetnacl` + `js-sha256` |
 | 文件上传 | COS JS SDK（cos-js-sdk-v5）或 MinIO multipart |
 | 语音识别 | 阿里云 ISI（WebSocket） |
-| 录音 H5 | `MediaRecorder` API |
+| 录音 H5 | `MediaRecorder` API（运行时选择支持的 MIME 类型） |
 | 录音 App | `uni.getRecorderManager()` |
+| Markdown App | `<rich-text>` 节点树（不能用 v-html） |
+| Markdown H5 | `marked` + `v-html` |
 
 ---
 
 ## 目录结构变更
 
-```
+```text
 src/
 ├── api/
 │   ├── login.js          # getCaptchaApi, sendSmsCodeApi, mobileLoginApi
@@ -43,12 +45,12 @@ src/
 │   └── upload.js         # 文件上传（COS / MinIO）
 ├── composables/
 │   ├── useAuth.js        # 登录状态、token/roles 持久化
-│   ├── useWukongIM.js    # WKSDK 连接管理、消息收发
+│   ├── useWukongIM.js    # WKSDK.shared() 连接管理、消息收发
 │   └── useChat.js        # 消息流、会话管理、系统提示词构建
 ├── components/
 │   ├── SliderCaptcha.vue     # 拖动验证码（touch 事件）
 │   ├── VoiceRecorder.vue     # 语音录制（条件编译）
-│   └── MarkdownContent.vue   # AI 回复 Markdown 渲染
+│   └── MarkdownContent.vue   # AI 回复 Markdown 渲染（H5/App 双路）
 ├── pages/
 │   ├── login/login.vue   # 改造为真实登录逻辑
 │   └── chat/chat.vue     # 接入真实 WUKONGIM 数据
@@ -62,12 +64,12 @@ src/
 
 ### 1.1 完整流程
 
-```
+```text
 用户输入手机号
     ↓
 点击「获取验证码」
     → GET /code
-    → 返回 { img(Base64背景), smallImage(Base64滑块), uuid }
+    → 返回 { img(Base64 背景), smallImage(Base64 滑块), uuid, oriImageWidth }
     → 弹出 SliderCaptcha 组件
     ↓
 用户拖动滑块
@@ -78,6 +80,7 @@ src/
     → 倒计时 60s 开始
     ↓
 用户输入短信验证码，点「登录」
+    → 存 uni.setStorageSync('jclaw_last_phone', phoneNumber)   ← 必须先存，device.js 依赖它
     → POST /auth/ai/sysLogin
       { phoneNumber, code: smsCode, uuid: smsUuid,
         forceType: 1, sourceType: 3, operateSource: 2 }
@@ -85,29 +88,45 @@ src/
     → uni.setStorageSync('jclaw_token', access_token)
     → uni.setStorageSync('jclaw_auth', { roles: userList, currentRoleId: userList[0].userId })
     → uni.reLaunch({ url: '/pages/chat/chat' })
+
+各步骤错误均通过 uni.showToast({ title: errMsg, icon: 'none' }) 展示
 ```
 
 ### 1.2 SliderCaptcha.vue
 
-- 接收 Base64 背景图（320px 原始宽度）与滑块图
-- 在 380px 宽容器内展示，拖动距离乘以缩放系数 `320/380` 传给接口
+- 接收 Base64 背景图和滑块图，以及 `oriImageWidth` 字段
+- 缩放系数 = `oriImageWidth / containerWidth`（不硬编码，从接口返回值计算）
 - 使用 `@touchstart` / `@touchmove` / `@touchend` 事件（兼容 H5 + App）
-- 验证失败自动刷新验证码图片
+- 验证失败自动调用 `getCaptchaApi()` 刷新图片
 
 ### 1.3 utils/request.js
 
+`operatePort` 必须始终追加到 **URL 查询参数**，不管是 GET 还是 POST。
+
+`BASE_URL` 按平台 / 环境区分：H5 开发时走 Vite proxy（`/api`），App 及生产 H5 直接用完整地址。
+
 ```js
-// 核心逻辑
+// H5 开发用代理前缀，其他环境用完整地址
+// #ifdef H5
+const BASE_URL = import.meta.env.DEV ? '/api' : import.meta.env.VITE_API_BASE_URL
+// #ifndef H5
+// const BASE_URL = import.meta.env.VITE_API_BASE_URL
+// #endif
+
 async function request(url, options = {}) {
   const token = uni.getStorageSync('jclaw_token')
   const clientId = await getDeviceId()
+
+  // operatePort 始终在 URL 查询参数里（兼容老版 App 运行时，不用 URLSearchParams）
   const allParams = { ...(options.params || {}), operatePort: 2 }
+  const qs = Object.entries(allParams).map(([k, v]) => `${k}=${v}`).join('&')
+  const fullUrl = `${BASE_URL}${url}${url.includes('?') ? '&' : '?'}${qs}`
 
   return new Promise((resolve, reject) => {
     uni.request({
-      url: BASE_URL + url,
+      url: fullUrl,
       method: options.method || 'GET',
-      data: options.body ? JSON.parse(options.body) : allParams,
+      data: options.data || undefined,   // POST body 原样传对象
       header: {
         'Content-Type': 'application/json',
         'Authorization': token || '',
@@ -115,6 +134,10 @@ async function request(url, options = {}) {
       },
       success(res) {
         if (res.data.code === 503) {
+          // callLogoutSilently: 尽力而为，不 await，不阻塞跳转
+          // POST /auth/ai/sysLogout，带上当前 token header 即可
+          uni.request({ url: `${BASE_URL}/auth/ai/sysLogout?operatePort=2`,
+            method: 'POST', header: { Authorization: token } })
           uni.removeStorageSync('jclaw_token')
           uni.reLaunch({ url: '/pages/login/login' })
           return
@@ -131,7 +154,8 @@ async function request(url, options = {}) {
 
 - 用 `tweetnacl.sign.keyPair()` 生成 Ed25519 密钥对
 - `deviceId = sha256(publicKey)` 作为 HTTP `clientid` 头
-- 存储 key：`jclaw_device_keypair_v2_${phoneNumber}`（uni.setStorageSync）
+- 存储 key：`jclaw_device_keypair_v2_${phoneNumber}`（优先用传入的 phone，fallback 取 `jclaw_last_phone`）
+- **注意**：`tweetnacl` 在 App 的 V8 引擎下可正常运行；若出现 `crypto` 异常，降级为 `Math.random` 生成 32 字节随机 hex 作为 deviceId
 
 ---
 
@@ -139,28 +163,52 @@ async function request(url, options = {}) {
 
 ### 2.1 连接流程（composables/useWukongIM.js）
 
+所有 SDK 调用必须通过 `WKSDK.shared()` 单例，不可直接用 `WKSDK.*`：
+
 ```js
+import WKSDK from 'wukongimjssdk'
+
 async function connect(userId, telephone, token) {
   const { modelType, wsAddr } = await getChatIMLongConnection({ sourceType: 3 })
+  const sdk = WKSDK.shared()
+
   if (modelType === 2) {
-    WKSDK.config.provider.connectAddrCallback = (cb) => cb(wsAddr)
+    sdk.config.provider.connectAddrCallback = (cb) => cb(wsAddr)
   } else {
-    WKSDK.config.addr = wsAddr
+    sdk.config.addr = wsAddr
   }
-  WKSDK.config.uid = String(userId)
-  WKSDK.config.token = token
-  WKSDK.connectManager.addConnectStatusListener(statusListener)
-  WKSDK.chatManager.addMessageListener(messageListener)
-  WKSDK.connectManager.connect()
+  sdk.config.uid = String(userId)
+  sdk.config.token = token
+  sdk.connectManager.addConnectStatusListener(statusListener)
+  sdk.chatManager.addMessageListener(messageListener)
+  sdk.connectManager.connect()
+}
+
+function disconnect() {
+  WKSDK.shared().connectManager.disconnect()
+}
+
+// reconnect = 用已保存的 uid/token/addr 直接重连，无需重新获取 wsAddr
+function reconnect() {
+  WKSDK.shared().connectManager.connect()
 }
 ```
 
-### 2.2 消息监听
+### 2.2 App 生命周期管理
+
+在 `App.vue` 中处理前后台切换，防止连接静默死亡：
+
+```js
+onHide(() => { wkIM.disconnect() })
+onShow(() => { if (auth.isLoggedIn) wkIM.reconnect() })
+```
+
+### 2.3 消息监听
 
 - 过滤 `msg.fromUID === currentUserId` 的消息（自己发的）
 - 只处理 `contentType === 1`（文本）和 `contentType === 103`（扩展）
 - 提取 `<thinking>...</thinking>` 内容单独展示
-- 清除 `<system>`, `<pcAction>`, `<appAction>`, `<deskAction>` 等标签
+- 清除 `<system>`, `<pcAction>`, `<appAction>`, `<deskAction>` 等标签后再显示
 
 ---
 
@@ -168,14 +216,26 @@ async function connect(userId, telephone, token) {
 
 ### 3.1 发送消息（composables/useChat.js）
 
-```
+```text
 1. 本地插入 user 消息（status: 'sent'）
 2. 插入 AI 占位消息（content: '', thinking: ' ', status: 'streaming'）
+   → streamingId = 占位消息 id
 3. 如果新会话：POST /eng/agent/add → 获取 backendId
 4. POST /eng/agent/addChatRecordData（含系统提示词 + 附件列表）
 5. wkIM.sendText("<system>\n角色提示词\noperate-port: 2\n用户令牌\n</system>\n\n用户消息")
-6. AI 通过 WS 回包 → 解析 → 更新占位消息
-7. uni.setStorageSync('jclaw_msgs_' + sessionId, messages)
+
+--- AI WS 回包（WUKONGIM 发离散 text 消息，非 SSE）---
+
+6. 第一条回包：content 非空 → 替换占位消息 content，status 保持 'streaming'
+7. 每条后续回包：追加 content，提取 thinking 标签
+8. 收到结束信号后 → status = 'done'，streamingId = null
+
+   结束信号判断规则（与 PC 端一致）：
+   · 消息 content 以约定结束标记结尾（后端实现决定，首选：判断 AI 在一段
+     静默时间内（2 s）无新消息，用防抖 timer 触发 done）
+   · 若后端明确发送 contentType=999 的结束帧则优先用该信号
+
+9. uni.setStorageSync('jclaw_msgs_' + sessionId, messages)
 ```
 
 ### 3.2 系统提示词构建
@@ -192,18 +252,25 @@ const wrapped = `<system>\n${sysBlock}\n</system>\n\n${userMessage}`
 ### 3.3 消息数据模型
 
 ```js
-// 扩展现有 stores/chat.js
+// stores/chat.js 扩展
 {
-  id: string,
-  sessionId: string,
+  id: String,
+  sessionId: String,
   role: 'user' | 'assistant',
-  content: string,
-  thinking: string,         // <thinking> 内容
-  attachments: Attachment[],
+  content: String,
+  thinking: String,          // <thinking> 内容
+  attachments: Attachment[], // { name, mimeType, url, previewUrl }
   status: 'sent' | 'streaming' | 'done' | 'error',
-  createdAt: number,
+  createdAt: Number,
 }
 ```
+
+### 3.4 多角色支持
+
+`userList` 可能包含多个角色：
+- 登录成功后默认激活 `userList[0]`
+- Chat 页面顶部提供角色切换入口（复用现有 DrawerNav 中的角色选择）
+- 切换角色时：调用 `/auth/ai/switchLogin` → 更新 token → 重新连接 WUKONGIM
 
 ---
 
@@ -211,7 +278,7 @@ const wrapped = `<system>\n${sysBlock}\n</system>\n\n${userMessage}`
 
 ### 4.1 InputBar.vue 改造
 
-新增按钮：📎 附件、🖼 图片、🎤 语音
+新增按钮：附件、图片、语音
 
 | 操作 | 实现 |
 |------|------|
@@ -222,39 +289,86 @@ const wrapped = `<system>\n${sysBlock}\n</system>\n\n${userMessage}`
 
 ### 4.2 VoiceRecorder.vue（条件编译）
 
-```vue
-<!-- H5 分支 -->
-<!-- #ifdef H5 -->
-<template><!-- 长按录音按钮，MediaRecorder(WebM/Opus) --></template>
-<!-- #endif -->
+**H5 分支**：
 
-<!-- App 分支 -->
-<!-- #ifndef H5 -->
-<template><!-- uni.getRecorderManager() 录制 AAC --></template>
-<!-- #endif -->
+```js
+// 运行时检测支持的格式
+const mimeType = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+  .find(t => MediaRecorder.isTypeSupported(t)) || 'audio/webm'
+const recorder = new MediaRecorder(stream, { mimeType })
 ```
 
-录制完成 → 上传文件 → 获取阿里云 ASR token → WebSocket 发送音频 → 返回文字追加到输入框
+**App 分支**：
+
+```js
+// #ifndef H5
+const manager = uni.getRecorderManager()
+manager.start({ format: 'aac', duration: 60000 })
+// mimeType = 'audio/aac'
+// #endif
+```
+
+录制完成后通过 `getAsrFormat(mimeType)` 映射阿里云格式字符串：
+
+```js
+function getAsrFormat(mimeType) {
+  if (mimeType.includes('webm') || mimeType.includes('ogg')) return 'opus'
+  if (mimeType.includes('mp4') || mimeType.includes('aac')) return 'aac'
+  return 'pcm'
+}
+```
+
+上传录音文件 → 获取阿里云 ASR token（`GET /eng/voice/aliyunToken`）→ WebSocket ISI 识别 → 文字追加到输入框
 
 ### 4.3 utils/upload.js
 
 ```js
-// 根据后端返回的 usageType 判断上传方式
 async function uploadFile(file, onProgress) {
-  const token = await getUploadToken() // GET /eng/file/temporary/token
-  if (token.usageType === 1) {
-    return uploadToCOS(file, token, onProgress)
+  const tokenData = await getUploadToken() // GET /eng/file/temporary/token
+  if (tokenData.usageType === 1) {
+    return uploadToCOS(file, tokenData, onProgress)
   } else {
-    return uploadToMinIO(file, token, onProgress)
+    return uploadToMinIO(file, tokenData, onProgress)
   }
 }
 ```
 
 ---
 
-## 五、stores/chat.js 改造
+## 五、MarkdownContent.vue（双路渲染）
+
+uni-app 3.x 的 `<rich-text>` 组件可直接接受 HTML 字符串（不需要手动转节点树），两端都能复用同一份 `marked` 输出：
+
+```vue
+<template>
+  <!-- H5: v-html 渲染，支持自定义 CSS -->
+  <!-- #ifdef H5 -->
+  <div class="markdown-body" v-html="renderedHtml" />
+  <!-- #endif -->
+
+  <!-- App: rich-text 接受 HTML 字符串 -->
+  <!-- #ifndef H5 -->
+  <rich-text :nodes="renderedHtml" />
+  <!-- #endif -->
+</template>
+
+<script setup>
+import { computed } from 'vue'
+import { marked } from 'marked'
+
+const props = defineProps({ content: String })
+const renderedHtml = computed(() => marked(props.content || ''))
+</script>
+```
+
+**限制**：`<rich-text>` 不支持 `<script>` / `<style>` 标签及事件绑定，但 AI 纯文本 Markdown 回复不需要这些，可以接受。
+
+---
+
+## 六、stores/chat.js 改造
 
 现有 mock store 改造为真实数据：
+
 - 去除硬编码 mock 消息
 - `sessions` 从 `/eng/agent/getUserAccountChatList` 加载
 - `messages` 从 `/eng/agent/chatRecordDataSearchPage` 分页加载
@@ -262,16 +376,31 @@ async function uploadFile(file, onProgress) {
 
 ---
 
-## 六、环境配置
+## 七、环境配置
 
 新增 `.env.dev`：
-```
+
+```bash
 VITE_API_BASE_URL=http://192.168.2.99:9199
+```
+
+`vite.config.js` 新增 H5 开发代理（解决跨域）：
+
+```js
+server: {
+  proxy: {
+    '/api': {
+      target: process.env.VITE_API_BASE_URL,
+      changeOrigin: true,
+      rewrite: path => path.replace(/^\/api/, ''),
+    }
+  }
+}
 ```
 
 ---
 
-## 七、依赖安装
+## 八、依赖安装
 
 ```bash
 npm install wukongimjssdk tweetnacl js-sha256 cos-js-sdk-v5 marked
@@ -279,11 +408,13 @@ npm install wukongimjssdk tweetnacl js-sha256 cos-js-sdk-v5 marked
 
 ---
 
-## 八、验证方式
+## 九、验证方式
 
 1. **登录流程**: 输入手机号 → 滑块弹出 → 拖动成功 → 短信收到 → 登录跳转聊天页
-2. **聊天基础**: 发送文本消息 → WS 回包 → AI 消息展示（含 thinking 折叠）
-3. **图片上传**: 选择图片 → 上传进度 → 消息中显示缩略图
-4. **语音识别**: 按住录音 → 松开 → 文字出现在输入框
-5. **会话持久化**: 刷新页面后消息仍在（localStorage）
-6. **登录态过期**: token 失效时自动跳转登录页
+2. **登录错误**: 故意输错验证码 → 看到 toast 提示，不崩溃
+3. **聊天基础**: 发送文本消息 → WS 回包 → AI 消息展示（含 thinking 折叠）
+4. **图片上传**: 选择图片 → 上传进度 → 消息中显示缩略图
+5. **语音识别**: 按住录音 → 松开 → 文字出现在输入框
+6. **会话持久化**: 刷新页面后消息仍在（uni.setStorageSync）
+7. **登录态过期**: 修改 token 为非法值 → 自动跳回登录页
+8. **App 后台切换**: 切换到后台再回来 → WS 自动重连，消息正常收发
