@@ -158,12 +158,13 @@ function handleSend() {
 @use '@/styles/variables.scss' as *;
 
 .input-bar-wrapper {
-  padding-bottom: constant(safe-area-inset-bottom);
-  padding-bottom: env(safe-area-inset-bottom);
-  background-color: $surface;
   padding-top: 16rpx;
   padding-left: 24rpx;
   padding-right: 24rpx;
+  padding-bottom: 20rpx;
+  padding-bottom: calc(20rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  background-color: $surface;
 }
 
 /* Attachment preview */

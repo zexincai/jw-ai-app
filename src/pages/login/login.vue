@@ -6,7 +6,7 @@
       <!-- Logo block -->
       <view class="logo-block">
         <view class="logo-icon">
-          <text class="logo-symbol">⬟</text>
+          <image src="/static/logo.png" class="logo-img" mode="aspectFit" />
         </view>
         <text class="app-title">HI, JClaw</text>
         <text class="app-subtitle">Welcome back to Project Architect</text>
@@ -21,6 +21,7 @@
             v-model="phone"
             class="text-input"
             type="tel"
+            :maxlength="11"
             placeholder="手机号"
             placeholder-class="ph"
           />
@@ -34,6 +35,7 @@
               v-model="smsCode"
               class="text-input"
               type="number"
+              :maxlength="6"
               placeholder="短信验证码"
               placeholder-class="ph"
             />
@@ -52,7 +54,6 @@
         <!-- Login button -->
         <view class="login-btn" :class="loading ? 'login-btn--disabled' : ''" @tap="handleLogin">
           <text class="login-btn-text">{{ loading ? '登录中...' : '登 录' }}</text>
-          <text v-if="!loading" class="login-btn-arrow">→</text>
         </view>
       </view>
     </view>
@@ -64,6 +65,8 @@
           :bg-img="captcha.bgImg"
           :piece-img="captcha.pieceImg"
           :ori-image-width="captcha.oriImageWidth"
+          :ori-image-height="captcha.oriImageHeight"
+          :piece-y="captcha.yHeight"
           @success="onSliderSuccess"
           @cancel="showCaptcha = false"
         />
@@ -89,7 +92,7 @@ const smsCode = ref('')
 const countdown = ref(0)
 const loading = ref(false)
 const showCaptcha = ref(false)
-const captcha = ref({ bgImg: '', pieceImg: '', oriImageWidth: 320, uuid: '' })
+const captcha = ref({ bgImg: '', pieceImg: '', oriImageWidth: 320, oriImageHeight: 0, yHeight: 0, uuid: '' })
 
 let countdownTimer = null
 let smsUuid = ''
@@ -101,6 +104,10 @@ async function onGetCode() {
     uni.showToast({ title: '请输入手机号', icon: 'none' })
     return
   }
+  if (!/^1\d{10}$/.test(p)) {
+    uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
+    return
+  }
   try {
     loading.value = true
     const res = await getCaptchaApi()
@@ -109,11 +116,13 @@ async function onGetCode() {
       bgImg: data.img || data.bgImage || '',
       pieceImg: data.smallImage || data.pieceImage || '',
       oriImageWidth: data.oriImageWidth || 320,
+      oriImageHeight: data.oriImageHeight || 0,
+      yHeight: data.yHeight || 0,
       uuid: data.uuid || '',
     }
     showCaptcha.value = true
   } catch (e) {
-    uni.showToast({ title: e?.errMsg || '获取验证码失败', icon: 'none' })
+    if (!e?.handled) uni.showToast({ title: e?.message || '获取验证码失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -130,12 +139,12 @@ async function onSliderSuccess(distance) {
       code: distance,
       sendType: 1,
     })
-    const data = res.data || res
-    smsUuid = data.uuid || data.smsUuid || ''
+    const data = res.data ?? res
+    smsUuid = typeof data === 'string' ? data : (data.uuid || data.smsUuid || '')
     startCountdown()
     uni.showToast({ title: '验证码已发送', icon: 'success' })
   } catch (e) {
-    uni.showToast({ title: e?.errMsg || '发送失败，请重试', icon: 'none' })
+    if (!e?.handled) uni.showToast({ title: e?.message || '发送失败，请重试', icon: 'none' })
     // Refresh captcha on failure
     try {
       const res2 = await getCaptchaApi()
@@ -144,6 +153,8 @@ async function onSliderSuccess(distance) {
         bgImg: d.img || d.bgImage || '',
         pieceImg: d.smallImage || d.pieceImage || '',
         oriImageWidth: d.oriImageWidth || 320,
+        oriImageHeight: d.oriImageHeight || 0,
+        yHeight: d.yHeight || 0,
         uuid: d.uuid || '',
       }
       showCaptcha.value = true
@@ -172,6 +183,14 @@ async function handleLogin() {
     uni.showToast({ title: '请填写手机号和验证码', icon: 'none' })
     return
   }
+  if (!/^1\d{10}$/.test(p)) {
+    uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
+    return
+  }
+  if (c.length < 4) {
+    uni.showToast({ title: '请输入完整的验证码', icon: 'none' })
+    return
+  }
   if (!smsUuid) {
     uni.showToast({ title: '请先获取验证码', icon: 'none' })
     return
@@ -181,7 +200,7 @@ async function handleLogin() {
     await auth.loginByMobile(p, c, smsUuid)
     uni.reLaunch({ url: '/pages/chat/chat' })
   } catch (e) {
-    uni.showToast({ title: e?.message || '登录失败', icon: 'none' })
+    if (!e?.handled) uni.showToast({ title: e?.message || '登录失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -227,18 +246,17 @@ onUnmounted(() => {
 .logo-icon {
   width: 160rpx;
   height: 160rpx;
-  background: linear-gradient(135deg, #005fae, #4b9bfa);
   border-radius: 48rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 40rpx;
-  box-shadow: 0 16rpx 48rpx rgba($primary, 0.3);
+  overflow: hidden;
 }
 
-.logo-symbol {
-  font-size: 80rpx;
-  color: $on-primary;
+.logo-img {
+  width: 100%;
+  height: 100%;
 }
 
 .app-title {

@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:9199',
+          target: env.VITE_API_BASE_URL || 'http://192.168.2.99:9199',
           changeOrigin: true,
           rewrite: path => path.replace(/^\/api/, ''),
         },

@@ -5,14 +5,36 @@ const token = ref('')
 const roles = ref([])
 const currentRoleId = ref('')
 
+const ORG_TYPE_AVATAR = {
+  0: '/static/headPortrait/yy.png',
+  1: '/static/headPortrait/dl.png',
+  2: '/static/headPortrait/js.png',
+  3: '/static/headPortrait/jl.png',
+  4: '/static/headPortrait/sg.png',
+  5: '/static/headPortrait/xm.png',
+  6: '/static/headPortrait/gy.png',
+  7: '/static/headPortrait/fb.png',
+  8: '/static/headPortrait/lw.png',
+  9: '/static/headPortrait/sj.png',
+  10: '/static/headPortrait/sgjt.png',
+  11: '/static/headPortrait/zfjg.png',
+  12: '/static/headPortrait/jsjt.png',
+  13: '/static/headPortrait/rebar.png',
+  14: '/static/headPortrait/xm.png',
+}
+
 function _mapRole(r) {
+  const name = r.loginName || r.orgName || String(r.userId)
   return {
     id: String(r.userId),
-    name: r.roleName || r.userName || String(r.userId),
-    avatar: (r.roleName || r.userName || 'AI').slice(0, 2).toUpperCase(),
+    name,
+    avatar: name.slice(0, 2).toUpperCase(),
+    avatarUrl: ORG_TYPE_AVATAR[r.orgType] ?? null,
+    orgType: r.orgType,
+    orgName: r.orgName || '',
     userId: r.userId,
     userRolePrompt: r.userRolePrompt || '',
-    telephone: r.telephone || r.phone || '',
+    telephone: r.telephone || '',
   }
 }
 
@@ -52,7 +74,7 @@ async function loginByMobile(phoneNumber, smsCode, smsUuid) {
 async function switchRole(roleId) {
   const role = roles.value.find(r => r.id === String(roleId))
   if (!role) return
-  const res = await switchLoginApi({ userId: role.userId })
+  const res = await switchLoginApi({ phoneNumber: role.telephone, pkId: String(role.userId) })
   const data = res.data || res
   if (data.access_token) {
     token.value = data.access_token

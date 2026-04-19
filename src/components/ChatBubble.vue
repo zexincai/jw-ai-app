@@ -16,7 +16,7 @@
   <!-- Assistant bubble -->
   <view v-else class="bubble-row bubble-row--left">
     <view class="ai-icon">
-      <text class="ai-icon-text">AI</text>
+      <image src="/static/logo.png" class="ai-icon-img" mode="aspectFit" />
     </view>
     <view class="bubble-wrap">
       <!-- Thinking block -->
@@ -120,7 +120,6 @@ const thinkingOpen = ref(false)
 .ai-icon {
   width: 56rpx;
   height: 56rpx;
-  background-color: $primary;
   border-radius: $radius-lg;
   display: flex;
   align-items: center;
@@ -128,12 +127,12 @@ const thinkingOpen = ref(false)
   flex-shrink: 0;
   margin-right: 16rpx;
   margin-top: 4rpx;
+  overflow: hidden;
 }
 
-.ai-icon-text {
-  color: $on-primary;
-  font-size: 20rpx;
-  font-weight: 700;
+.ai-icon-img {
+  width: 100%;
+  height: 100%;
 }
 
 /* Thinking block */

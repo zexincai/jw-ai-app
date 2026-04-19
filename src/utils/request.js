@@ -1,9 +1,24 @@
-import { getDeviceId } from './device.js'
-
 let BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 // #ifdef H5
 if (import.meta.env.DEV) BASE_URL = '/api'
 // #endif
+
+// 并发请求计数器，所有请求完成后统一隐藏 loading
+let _loadingCount = 0
+
+function _showLoading() {
+  _loadingCount++
+  if (_loadingCount === 1) {
+    uni.showLoading({ title: '加载中...', mask: true })
+  }
+}
+
+function _hideLoading() {
+  _loadingCount = Math.max(0, _loadingCount - 1)
+  if (_loadingCount === 0) {
+    uni.hideLoading()
+  }
+}
 
 function buildQs(params) {
   return Object.entries(params)
@@ -11,13 +26,14 @@ function buildQs(params) {
     .join('&')
 }
 
-export function request(url, { method = 'GET', params = {}, data } = {}) {
+export function request(url, { method = 'GET', params = {}, data, silent = false } = {}) {
   return new Promise(async (resolve, reject) => {
     const token = uni.getStorageSync('jclaw_token') || ''
-    const clientId = await getDeviceId()
     const qs = buildQs({ ...params, operatePort: 2 })
     const sep = url.includes('?') ? '&' : '?'
     const fullUrl = `${BASE_URL}${url}${sep}${qs}`
+
+    if (!silent) _showLoading()
 
     uni.request({
       url: fullUrl,
@@ -25,31 +41,42 @@ export function request(url, { method = 'GET', params = {}, data } = {}) {
       data,
       header: {
         'Content-Type': 'application/json',
-        'Authorization': token,
-        'clientid': clientId,
+        Authorization: token,
       },
       success(res) {
+        if (!silent) _hideLoading()
         const body = res.data
         if (body && body.code === 503) {
           uni.request({
             url: `${BASE_URL}/auth/ai/sysLogout?operatePort=2`,
             method: 'POST',
-            header: { 'Authorization': token, 'Content-Type': 'application/json' },
+            header: { Authorization: token, 'Content-Type': 'application/json' },
           })
           uni.removeStorageSync('jclaw_token')
           uni.reLaunch({ url: '/pages/login/login' })
           return
         }
+        if (body && body.code !== undefined && body.code !== 200) {
+          uni.showToast({ title: body.msg || '请求失败', icon: 'none', duration: 2000 })
+          const err = new Error(body.msg || '请求失败')
+          err.code = body.code
+          err.handled = true
+          reject(err)
+          return
+        }
         resolve(body)
       },
-      fail: reject,
+      fail(err) {
+        if (!silent) _hideLoading()
+        reject(err)
+      },
     })
   })
 }
 
 export const http = {
-  get: (url, params) => request(url, { method: 'GET', params }),
-  post: (url, data, params) => request(url, { method: 'POST', data, params }),
-  put: (url, data, params) => request(url, { method: 'PUT', data, params }),
-  delete: (url, params) => request(url, { method: 'DELETE', params }),
+  get:    (url, params, opts)       => request(url, { method: 'GET',    params, ...opts }),
+  post:   (url, data, params, opts) => request(url, { method: 'POST',   data, params, ...opts }),
+  put:    (url, data, params, opts) => request(url, { method: 'PUT',    data, params, ...opts }),
+  delete: (url, params, opts)       => request(url, { method: 'DELETE', params, ...opts }),
 }

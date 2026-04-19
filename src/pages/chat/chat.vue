@@ -6,10 +6,7 @@
       <view class="topbar-btn" @tap="drawerVisible = true">
         <image src="/static/icon-menu.svg" class="topbar-icon" mode="aspectFit" />
       </view>
-      <text class="topbar-title">Project Architect</text>
-      <view class="topbar-btn" @tap="handleNewChat">
-        <image src="/static/icon-add.svg" class="topbar-icon" mode="aspectFit" />
-      </view>
+      <text class="topbar-title">{{ auth.currentRole?.name || 'JClaw' }}</text>
     </view>
 
     <scroll-view
@@ -26,7 +23,7 @@
 
         <view v-if="store.aiReplying && store.activeMessages.at(-1)?.status !== 'streaming'" class="typing-row">
           <view class="typing-icon">
-            <text class="typing-icon-text">AI</text>
+            <image src="/static/logo.png" class="typing-icon-img" mode="aspectFit" />
           </view>
           <view class="typing-bubble">
             <view class="dot" />
@@ -51,6 +48,7 @@
       @select-session="handleSelectSession"
       @select-role="handleSelectRole"
       @new-chat="handleNewChat"
+      @open-settings="handleOpenSettings"
     />
   </view>
 </template>
@@ -109,11 +107,23 @@ async function handleSelectRole(id) {
     wkIM.disconnect()
     wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
   }
+  await chat.loadSessions()
+  if (store.sessions.length) {
+    await chat.loadSession(store.sessions[0].id)
+  } else {
+    store.newLocalSession()
+  }
+  drawerVisible.value = false
 }
 
 function handleNewChat() {
   store.newLocalSession()
   drawerVisible.value = false
+}
+
+function handleOpenSettings() {
+  drawerVisible.value = false
+  uni.navigateTo({ url: '/pages/settings/settings' })
 }
 </script>
 
@@ -164,6 +174,8 @@ function handleNewChat() {
   font-size: 32rpx;
   font-weight: 600;
   color: $primary;
+  flex: 1;
+  text-align: center;
 }
 
 .message-list {
@@ -196,12 +208,12 @@ function handleNewChat() {
   justify-content: center;
   margin-right: 16rpx;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
-.typing-icon-text {
-  color: $on-primary;
-  font-size: 20rpx;
-  font-weight: 700;
+.typing-icon-img {
+  width: 100%;
+  height: 100%;
 }
 
 .typing-bubble {

@@ -7,30 +7,43 @@
     <view class="drawer-inner">
       <!-- Two column layout: roles + sessions -->
       <view class="drawer-content">
-        <!-- Role list column -->
+        <!-- Role list column: only avatars, scrollable -->
         <view class="role-column">
-          <text class="column-label">Roles</text>
-          <view
-            v-for="role in roles"
-            :key="role.id"
-            class="role-item"
-            :class="role.id === activeRoleId ? 'role-item--active' : ''"
-            @tap="selectRole(role.id)"
-          >
-            <view class="role-avatar">
-              <text class="role-avatar-text">{{ role.avatar }}</text>
+          <text class="column-label"></text>
+          <scroll-view scroll-y class="role-list">
+            <view
+              v-for="role in roles"
+              :key="role.id"
+              class="role-item"
+              @tap="selectRole(role.id)"
+            >
+              <view class="role-avatar" :class="role.id === activeRoleId ? 'role-avatar--active' : ''">
+                <image v-if="role.avatarUrl" :src="role.avatarUrl" class="role-avatar-img" mode="aspectFill" />
+                <text v-else class="role-avatar-text">{{ role.avatar }}</text>
+              </view>
             </view>
-            <text class="role-name">{{ role.name }}</text>
-          </view>
+          </scroll-view>
         </view>
 
         <!-- Session list column -->
         <view class="session-column">
-          <!-- Search (non-functional this phase) -->
+          <!-- Active role name display -->
+          <view v-if="activeRole" class="role-name-row">
+            <view class="role-name-avatar">
+              <image v-if="activeRole.avatarUrl" :src="activeRole.avatarUrl" class="role-name-avatar-img" mode="aspectFill" />
+              <text v-else class="role-name-avatar-text">{{ activeRole.avatar }}</text>
+            </view>
+            <view class="role-name-info">
+              <text class="role-name-text">{{ activeRole.name }}</text>
+              <text v-if="activeRole.orgName" class="role-org-text">{{ activeRole.orgName }}</text>
+            </view>
+          </view>
+
+          <!-- Search row -->
           <view class="search-row">
             <view class="search-box">
               <text class="search-icon">🔍</text>
-              <input class="search-input" placeholder="Search sessions..." placeholder-class="ph" disabled />
+              <input class="search-input" v-model="searchQuery" placeholder="搜索会话..." placeholder-class="ph" />
             </view>
             <view class="new-btn" @tap="emit('new-chat')">
               <image src="/static/icon-add.svg" class="new-icon" mode="aspectFit" />
@@ -39,9 +52,8 @@
 
           <!-- Session list -->
           <scroll-view scroll-y class="session-list">
-            <!-- Today -->
             <view v-if="todaySessions.length">
-              <text class="group-label">Today</text>
+              <text class="group-label">今天</text>
               <view
                 v-for="s in todaySessions"
                 :key="s.id"
@@ -53,11 +65,23 @@
               </view>
             </view>
 
-            <!-- Yesterday -->
             <view v-if="yesterdaySessions.length">
-              <text class="group-label">Yesterday</text>
+              <text class="group-label">昨天</text>
               <view
                 v-for="s in yesterdaySessions"
+                :key="s.id"
+                class="session-item"
+                :class="s.id === activeSessionId ? 'session-item--active' : ''"
+                @tap="selectSession(s.id)"
+              >
+                <text class="session-title">{{ s.title }}</text>
+              </view>
+            </view>
+
+            <view v-if="earlierSessions.length">
+              <text class="group-label">更早</text>
+              <view
+                v-for="s in earlierSessions"
                 :key="s.id"
                 class="session-item"
                 :class="s.id === activeSessionId ? 'session-item--active' : ''"
@@ -70,20 +94,20 @@
         </view>
       </view>
 
-      <!-- Footer user info -->
+      <!-- Footer: shows active role info -->
       <view class="footer">
         <view class="user-row">
           <view class="avatar">
-            <text class="avatar-text">DA</text>
+            <image v-if="activeRole?.avatarUrl" :src="activeRole.avatarUrl" class="footer-avatar-img" mode="aspectFill" />
+            <text v-else class="avatar-text">{{ activeRole?.avatar || 'AI' }}</text>
           </view>
           <view class="user-info">
-            <text class="user-name">Digital Architect</text>
-            <text class="user-role">Lead Planner · Premium</text>
+            <text class="user-name">{{ activeRole?.name || 'AI Assistant' }}</text>
+            <text class="user-role">{{ activeRole?.orgName || activeRole?.telephone || '' }}</text>
           </view>
         </view>
-        <!-- Settings: non-interactive this phase -->
-        <view class="settings-btn">
-          <text class="settings-text">⚙ Settings</text>
+        <view class="settings-btn" @tap="onSettings">
+          <text class="settings-text">⚙ 设置</text>
         </view>
       </view>
     </view>
@@ -91,7 +115,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   visible:          { type: Boolean, required: true },
@@ -101,18 +125,38 @@ const props = defineProps({
   activeRoleId:     { type: String,  required: true },
 })
 
-const emit = defineEmits(['close', 'select-session', 'select-role', 'new-chat'])
+const emit = defineEmits(['close', 'select-session', 'select-role', 'new-chat', 'open-settings'])
 
-const todaySessions     = computed(() => props.sessions.filter(s => s.date === 'today'))
-const yesterdaySessions = computed(() => props.sessions.filter(s => s.date === 'yesterday'))
+const searchQuery = ref('')
 
-function selectSession(id) {
-  emit('select-session', id)
+const activeRole = computed(() => props.roles.find(r => r.id === props.activeRoleId) || props.roles[0])
+
+function getDateLabel(isoStr) {
+  if (!isoStr) return 'earlier'
+  const d = new Date(isoStr)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  const sessionDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  if (sessionDay >= today) return 'today'
+  if (sessionDay >= yesterday) return 'yesterday'
+  return 'earlier'
 }
 
-function selectRole(id) {
-  emit('select-role', id)
-}
+const filteredSessions = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return props.sessions
+  return props.sessions.filter(s => s.title?.toLowerCase().includes(q))
+})
+
+const todaySessions     = computed(() => filteredSessions.value.filter(s => getDateLabel(s.createdAt) === 'today'))
+const yesterdaySessions = computed(() => filteredSessions.value.filter(s => getDateLabel(s.createdAt) === 'yesterday'))
+const earlierSessions   = computed(() => filteredSessions.value.filter(s => getDateLabel(s.createdAt) === 'earlier'))
+
+function selectSession(id) { emit('select-session', id) }
+function selectRole(id)    { emit('select-role', id) }
+function onSettings()      { emit('open-settings') }
 </script>
 
 <style lang="scss" scoped>
@@ -136,9 +180,7 @@ function selectRole(id) {
   display: flex;
   flex-direction: column;
 
-  &--open {
-    transform: translateX(0);
-  }
+  &--open { transform: translateX(0); }
 }
 
 .drawer-inner {
@@ -155,69 +197,67 @@ function selectRole(id) {
   overflow: hidden;
 }
 
+// ── Role column ──────────────────────────────────────
+
 .role-column {
-  width: 180rpx;
+  width: 112rpx;
   border-right: 2rpx solid $surface-container;
   display: flex;
-  background-color: #f3f3f3;
   flex-direction: column;
-  padding: 16rpx 12rpx;
+  background-color: #f3f3f3;
+  padding: 16rpx 0;
   flex-shrink: 0;
 }
 
 .column-label {
-  font-size: 20rpx;
+  font-size: 18rpx;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 2rpx;
   color: $outline;
-  padding: 0 8rpx 16rpx;
+  text-align: center;
+  padding-bottom: 12rpx;
+}
+
+.role-list {
+  flex: 1;
+  height: 0;
 }
 
 .role-item {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16rpx 8rpx;
-  border-radius: $radius-lg;
-  margin-bottom: 8rpx;
-
-  &--active {
-    background-color: rgba($primary, 0.1);
-  }
+  justify-content: center;
+  padding: 10rpx 0;
 }
 
 .role-avatar {
-  width: 64rpx;
-  height: 64rpx;
+  width: 80rpx;
+  height: 80rpx;
   border-radius: $radius-xl;
-  background-color: $primary-container;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8rpx;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 3rpx solid transparent;
+
+  &--active {
+    border-color: $primary;
+  }
+}
+
+.role-avatar-img {
+  width: 100%;
+  height: 100%;
 }
 
 .role-avatar-text {
-  font-size: 20rpx;
+  font-size: 22rpx;
   font-weight: 700;
   color: $on-primary-container;
 }
 
-.role-name {
-  font-size: 20rpx;
-  color: $on-surface;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.role-item--active .role-name {
-  color: $primary;
-  font-weight: 600;
-}
+// ── Session column ───────────────────────────────────
 
 .session-column {
   flex: 1;
@@ -226,11 +266,68 @@ function selectRole(id) {
   overflow: hidden;
 }
 
+.role-name-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 24rpx 16rpx;
+  border-bottom: 2rpx solid rgba($outline-variant, 0.15);
+}
+
+.role-name-avatar {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: $radius-lg;
+  background-color: $primary-container;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.role-name-avatar-img {
+  width: 100%;
+  height: 100%;
+}
+
+.role-name-avatar-text {
+  font-size: 18rpx;
+  font-weight: 700;
+  color: $on-primary-container;
+}
+
+.role-name-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.role-name-text {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: $primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-org-text {
+  display: block;
+  font-size: 20rpx;
+  color: $outline;
+  margin-top: 4rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .search-row {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 24rpx 24rpx 16rpx;
+  padding: 16rpx 24rpx;
   gap: 16rpx;
 }
 
@@ -245,10 +342,7 @@ function selectRole(id) {
   gap: 12rpx;
 }
 
-.search-icon {
-  font-size: 28rpx;
-  color: $outline;
-}
+.search-icon { font-size: 28rpx; color: $outline; }
 
 .search-input {
   flex: 1;
@@ -279,7 +373,6 @@ function selectRole(id) {
 .session-list {
   flex: 1;
   padding: 0 16rpx;
-  overflow: hidden;
 }
 
 .group-label {
@@ -289,7 +382,7 @@ function selectRole(id) {
   text-transform: uppercase;
   letter-spacing: 2rpx;
   color: $outline;
-  padding: 24rpx 16rpx 8rpx;
+  padding: 20rpx 16rpx 8rpx;
 }
 
 .session-item {
@@ -297,9 +390,7 @@ function selectRole(id) {
   border-radius: $radius-lg;
   margin-bottom: 4rpx;
 
-  &--active {
-    background-color: rgba($primary, 0.1);
-  }
+  &--active { background-color: rgba($primary, 0.1); }
 }
 
 .session-title {
@@ -316,12 +407,12 @@ function selectRole(id) {
   font-weight: 600;
 }
 
+// ── Footer ───────────────────────────────────────────
+
 .footer {
   padding: 24rpx;
-  margin-bottom: 20rpx;
   border-top: 2rpx solid $surface-container;
-  padding-bottom: constant(safe-area-inset-bottom);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: calc(20rpx + constant(safe-area-inset-bottom)) ;
 }
 
 .user-row {
@@ -336,11 +427,16 @@ function selectRole(id) {
   width: 80rpx;
   height: 80rpx;
   border-radius: $radius-xl;
-  background-color: $primary-container;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   flex-shrink: 0;
+}
+
+.footer-avatar-img {
+  width: 100%;
+  height: 100%;
 }
 
 .avatar-text {
@@ -368,7 +464,6 @@ function selectRole(id) {
   background-color: $surface-container-lowest;
   border-radius: $radius-lg;
   border: 2rpx solid rgba($outline-variant, 0.3);
-  margin-top: 16rpx;
 }
 
 .settings-text {

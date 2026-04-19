@@ -7,13 +7,14 @@
 
     <!-- Background image -->
     <view class="img-wrap" ref="imgWrapRef">
-      <image :src="bgSrc" class="bg-img" mode="aspectFill" @load="onBgLoad" />
+      <image :src="bgSrc" class="bg-img" mode="widthFix" @load="onBgLoad" />
       <!-- Slider piece -->
       <image
         :src="pieceSrc"
         class="piece-img"
-        :style="{ left: offsetX + 'px' }"
-        mode="aspectFit"
+        :style="pieceStyle"
+        mode="scaleToFill"
+        @load="onPieceLoad"
       />
     </view>
 
@@ -36,56 +37,101 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 
 const props = defineProps({
   bgImg: { type: String, default: '' },
   pieceImg: { type: String, default: '' },
   oriImageWidth: { type: Number, default: 320 },
+  oriImageHeight: { type: Number, default: 0 },
+  pieceY: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['success', 'cancel'])
 
-const HANDLE_SIZE = 44    // px
+const HANDLE_SIZE = 44    // px — fallback, dynamically overridden
 
 const offsetX = ref(0)
 const dragging = ref(false)
+const containerWidth = ref(0)
 let startX = 0
-let containerWidth = 0
+let trackWidth = 0
+let handleSize = HANDLE_SIZE
 
-// Convert base64 or URL to src
-const bgSrc = computed(() => props.bgImg ? `data:image/png;base64,${props.bgImg}` : '')
-const pieceSrc = computed(() => props.pieceImg ? `data:image/png;base64,${props.pieceImg}` : '')
+function toSrc(val) {
+  if (!val) return ''
+  if (val.startsWith('data:') || val.startsWith('http')) return val
+  return `data:image/png;base64,${val}`
+}
+
+const bgSrc = computed(() => toSrc(props.bgImg))
+const pieceSrc = computed(() => toSrc(props.pieceImg))
+
+// Natural dimensions of the background image
+const bgNaturalW = ref(0)
+const bgNaturalH = ref(0)
+
+// Natural dimensions of the piece image (px)
+const pieceNaturalW = ref(0)
+const pieceNaturalH = ref(0)
+
+// Piece rendered size: scale by same ratio as background image
+const pieceStyle = computed(() => {
+  if (!pieceNaturalW.value || !pieceNaturalH.value || !bgNaturalW.value || !containerWidth.value) {
+    return { display: 'none' }
+  }
+  const scale = containerWidth.value / bgNaturalW.value
+  const top = Math.round(props.pieceY * scale)
+  return {
+    left: offsetX.value + 'px',
+    top: top + 'px',
+    width: Math.round(pieceNaturalW.value * scale) + 'px',
+    height: Math.round(pieceNaturalH.value * scale) + 'px',
+  }
+})
+
+function onPieceLoad(e) {
+  const { width, height } = e.detail
+  pieceNaturalW.value = width
+  pieceNaturalH.value = height
+}
 
 function onBgLoad(e) {
-  // Get actual rendered container width for scaling
-  const query = uni.createSelectorQuery()
-  query.select('.img-wrap').boundingClientRect(rect => {
-    if (rect) containerWidth = rect.width
-  }).exec()
+  const { width, height } = e.detail
+  bgNaturalW.value = width
+  bgNaturalH.value = height
+  nextTick(() => {
+    const query = uni.createSelectorQuery()
+    query.select('.img-wrap').boundingClientRect(rect => {
+      if (rect) containerWidth.value = rect.width
+    }).exec()
+  })
 }
 
 function onTouchStart(e) {
   dragging.value = true
   startX = e.touches[0].clientX - offsetX.value
-  // Measure container width
+  // Measure track width and handle size
   const query = uni.createSelectorQuery()
-  query.select('.img-wrap').boundingClientRect(rect => {
-    if (rect) containerWidth = rect.width
-  }).exec()
+  query.select('.img-wrap').boundingClientRect(r1 => {
+    if (r1) containerWidth.value = r1.width
+  })
+  query.select('.track').boundingClientRect(r2 => {
+    if (r2) trackWidth = r2.width
+  })
+  query.select('.handle').boundingClientRect(r3 => {
+    if (r3) handleSize = r3.width
+  })
+  query.exec()
 }
 
 function onTouchMove(e) {
   if (!dragging.value) return
-  const query = uni.createSelectorQuery()
-  query.select('.track').boundingClientRect(rect => {
-    if (!rect) return
-    const maxOffset = rect.width - HANDLE_SIZE
-    let x = e.touches[0].clientX - startX
-    if (x < 0) x = 0
-    if (x > maxOffset) x = maxOffset
-    offsetX.value = x
-  }).exec()
+  const maxOffset = (trackWidth || 300) - (handleSize || HANDLE_SIZE)
+  let x = e.touches[0].clientX - startX
+  if (x < 0) x = 0
+  if (x > maxOffset) x = maxOffset
+  offsetX.value = x
 }
 
 function onTouchEnd() {
@@ -94,7 +140,7 @@ function onTouchEnd() {
   if (offsetX.value < 10) return
 
   // Scale the drag distance to backend's image coordinate space
-  const scale = props.oriImageWidth / (containerWidth || props.oriImageWidth)
+  const scale = (bgNaturalW.value || props.oriImageWidth) / (containerWidth.value || props.oriImageWidth)
   const scaledDistance = Math.round(offsetX.value * scale)
   emit('success', scaledDistance)
 }
@@ -133,7 +179,6 @@ function onTouchEnd() {
 .img-wrap {
   position: relative;
   width: 100%;
-  height: 200rpx;
   border-radius: $radius-lg;
   overflow: hidden;
   background: $surface-container;
@@ -142,14 +187,11 @@ function onTouchEnd() {
 
 .bg-img {
   width: 100%;
-  height: 100%;
+  display: block;
 }
 
 .piece-img {
   position: absolute;
-  top: 0;
-  height: 100%;
-  width: 60rpx;
 }
 
 .track-wrap {

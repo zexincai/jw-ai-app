@@ -1,13 +1,58 @@
 import { http } from '../utils/request.js'
 
+/**
+ * 获取图形验证码
+ * @returns {Promise<{
+ *   img: string,           // 背景图 base64
+ *   smallImage: string,    // 滑块图 base64
+ *   slidingWidth: number,  // 滑块宽度
+ *   slidingHeight: number, // 滑块高度
+ *   oriImageWidth: number, // 背景图宽度
+ *   oriImageHeight: number,// 背景图高度
+ *   yHeight: number,       // 滑块 y 坐标
+ *   captchaType: string,   // 验证码类型
+ *   uuid: string,          // 验证码唯一标识，发送短信时传入
+ *   code: number           // 保留字段
+ * }>}
+ */
 export function getCaptchaApi() {
   return http.get('/code')
 }
 
+/**
+ * 发送短信验证码
+ * @param {object} params
+ * @param {string} params.phoneNumber  手机号
+ * @param {string} params.uuid         图形验证码 uuid（来自 getCaptchaApi）
+ * @param {number} params.code         拖动滑块的距离（x 坐标）
+ * @param {number} [params.sendType=1] 用途类型：登录:1，找回密码:3，账号注册:4
+ * @returns {Promise<string>} 返回新的 uuid，登录时作为 mobileLoginApi 的 uuid 参数
+ */
 export function sendSmsCodeApi({ phoneNumber, uuid, code, sendType = 1 }) {
   return http.post('/auth/send/verification/code', { phoneNumber, uuid, code, sendType })
 }
 
+/**
+ * 手机号验证码登录（AI 移动端）
+ * @param {object} params
+ * @param {string} params.phoneNumber 手机号
+ * @param {string} params.code        短信验证码
+ * @param {string} params.uuid        sendSmsCodeApi 返回的 uuid
+ * @returns {Promise<{
+ *   access_token: string,  // 登录令牌，后续请求放入 Authorization 头
+ *   expires_in: string,    // 令牌有效期（秒）
+ *   userList: Array<{
+ *     userId: number,          // 用户主键ID
+ *     loginName: string,       // 登录账号名
+ *     orgName: string,         // 所属组织名称
+ *     orgType: number,         // 组织类型
+ *     telephone: string,       // 手机号
+ *     pastStatus: number,      // 账号状态：0 禁用，1 启用，2 已过期
+ *     isMaster: number,        // 是否管理员：0 否，1 是
+ *     userRolePrompt: string,  // AI 角色提示语
+ *   }>
+ * }>}
+ */
 export function mobileLoginApi({ phoneNumber, code, uuid }) {
   return http.post('/auth/ai/sysLogin', {
     phoneNumber,
@@ -19,6 +64,16 @@ export function mobileLoginApi({ phoneNumber, code, uuid }) {
   })
 }
 
-export function switchLoginApi({ userId }) {
-  return http.post('/auth/ai/switchLogin', { userId })
+/**
+ * 切换登录账号
+ * @param {object} params
+ * @param {string} params.phoneNumber 手机号
+ * @param {string} params.pkId        目标账号的用户主键ID字符串（来自 mobileLoginApi 返回的 userList[].userId）
+ * @returns {Promise<{
+ *   access_token: string, // 新账号的登录令牌
+ *   expires_in: string    // 令牌有效期（秒）
+ * }>}
+ */
+export function switchLoginApi({ phoneNumber, pkId }) {
+  return http.post('/auth/switchLogin', { phoneNumber, pkId, sourceType: 3 })
 }
