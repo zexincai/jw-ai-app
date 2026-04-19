@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import WKSDK from 'wukongimjssdk'
+import { WKSDK, Channel, ChannelTypePerson, MessageText } from 'wukongimjssdk'
 import { getChatIMLongConnection } from '../api/agent.js'
 
 const status = ref('disconnected')
@@ -9,8 +9,8 @@ let _listenersAdded = false
 
 function _statusListener(s) {
   if (s === 1) status.value = 'connected'
-  else if (s === 2) status.value = 'disconnected'
-  else if (s === 0) status.value = 'connecting'
+  else if (s === 2) status.value = 'connecting'
+  else status.value = 'disconnected'
 }
 
 function _messageListener(msg) {
@@ -43,6 +43,14 @@ async function connect(userId, telephone, token) {
   sdk.connectManager.connect()
 }
 
+function _ensureListeners() {
+  if (_listenersAdded) return
+  const sdk = WKSDK.shared()
+  sdk.connectManager.addConnectStatusListener(_statusListener)
+  sdk.chatManager.addMessageListener(_messageListener)
+  _listenersAdded = true
+}
+
 function disconnect() {
   const sdk = WKSDK.shared()
   sdk.connectManager.removeConnectStatusListener(_statusListener)
@@ -53,11 +61,11 @@ function disconnect() {
 }
 
 function reconnect() {
+  _ensureListeners()
   WKSDK.shared().connectManager.connect()
 }
 
 function sendText(text) {
-  const { Channel, ChannelTypePerson, MessageText } = WKSDK
   const channel = new Channel(_telephone, ChannelTypePerson)
   const msg = new MessageText(text)
   WKSDK.shared().chatManager.send(msg, channel)

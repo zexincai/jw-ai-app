@@ -46,7 +46,6 @@ const props = defineProps({
 
 const emit = defineEmits(['success', 'cancel'])
 
-const TRACK_WIDTH = 280   // rpx → will be converted below
 const HANDLE_SIZE = 44    // px
 
 const offsetX = ref(0)
