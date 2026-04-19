@@ -1,67 +1,28 @@
 import { defineStore } from 'pinia'
 
-let _nextId = 100
-function uid() {
-  return String(++_nextId)
+function getDateLabel(createdAt) {
+  if (!createdAt) return 'today'
+  const d = new Date(createdAt)
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  if (d.toDateString() === today.toDateString()) return 'today'
+  if (d.toDateString() === yesterday.toDateString()) return 'yesterday'
+  return 'earlier'
 }
-
-const ROLES = [
-  { id: 'DA', name: 'Digital Architect', avatar: 'DA' },
-  { id: 'LP', name: 'Lead Planner',      avatar: 'LP' },
-]
-
-const MOCK_SESSIONS = [
-  {
-    id: '1',
-    title: 'Site structural analysis',
-    date: 'today',
-    messages: [
-      {
-        id: 'm1',
-        type: 'user',
-        text: 'Please analyze the structural requirements for the South Wing foundation and suggest a material procurement list.',
-      },
-      {
-        id: 'm2',
-        type: 'reasoning',
-        text: 'I am evaluating the load-bearing requirements for the South Wing based on the latest geotechnical reports. The seismic zone mandates a higher ductile requirement. I am calculating the reinforcement density for the pile caps and grade beams, then cross-referencing availability with local suppliers for high-tensile steel.',
-      },
-      {
-        id: 'm3',
-        type: 'ai',
-        text: "Based on my analysis, I have compiled the mandatory material list for the South Wing foundation. This includes specialized high-yield reinforcement bars and standard wire rods for stirrups, ensuring compliance with both local seismic codes and your project's efficiency targets.",
-        table: {
-          rows: [
-            { material: 'Steel Bars (T16)', subtext: 'High-Yield Reinforcement', spec: 'Grade 500B, 12m lengths', quantity: '45.5 Tons',  priority: 'Critical' },
-            { material: 'Steel Bars (T25)', subtext: 'Primary Load Bearers',     spec: 'Grade 500B, 12m lengths', quantity: '112.0 Tons', priority: 'Critical' },
-            { material: 'Wire Rods',        subtext: 'Stirrups & Ties',          spec: '8mm Mild Steel, Coiled', quantity: '12.8 Tons',   priority: 'Normal'   },
-          ],
-        },
-      },
-    ],
-  },
-  { id: '2', title: 'Urban planning feedback',        date: 'today',     messages: [] },
-  { id: '3', title: 'Material sustainability report', date: 'yesterday', messages: [] },
-  { id: '4', title: 'Zoning permit drafting',         date: 'yesterday', messages: [] },
-  { id: '5', title: 'Landscape design brainstorming', date: 'yesterday', messages: [] },
-]
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
-    roles: ROLES,
-    activeRoleId: 'DA',
-    sessions: MOCK_SESSIONS.map(s => ({ ...s, messages: [...s.messages] })),
-    activeSessionId: '1',
-    isTyping: false,
+    sessions: [],
+    messages: [],
+    activeSessionId: '',
+    aiReplying: false,
+    wsStatus: 'disconnected',
   }),
 
   getters: {
-    currentMessages(state) {
-      const session = state.sessions.find(s => s.id === state.activeSessionId)
-      return session ? session.messages : []
-    },
-    currentRole(state) {
-      return state.roles.find(r => r.id === state.activeRoleId) || state.roles[0]
+    activeMessages(state) {
+      return state.messages.filter(m => m.sessionId === state.activeSessionId)
     },
   },
 
@@ -70,44 +31,40 @@ export const useChatStore = defineStore('chat', {
       this.activeSessionId = id
     },
 
-    switchRole(id) {
-      this.activeRoleId = id
-    },
-
-    newSession() {
-      const id = uid()
-      this.sessions.push({
-        id,
-        title: 'New conversation',
-        date: 'today',
-        messages: [],
-      })
+    newLocalSession() {
+      const id = `local_${Date.now()}`
+      const now = new Date().toISOString()
+      this.sessions.unshift({ id, title: '新对话', createdAt: now, date: 'today' })
       this.activeSessionId = id
+      return id
     },
 
-    sendMessage(text) {
-      const session = this.sessions.find(s => s.id === this.activeSessionId)
-      if (!session) return
+    pushMessage(msg) {
+      this.messages.push(msg)
+    },
 
-      session.messages.push({ id: uid(), type: 'user', text })
-      this.isTyping = true
+    upsertMessage(msg) {
+      const idx = this.messages.findIndex(m => m.id === msg.id)
+      if (idx >= 0) {
+        this.messages[idx] = msg
+      } else {
+        this.messages.push(msg)
+      }
+    },
 
-      setTimeout(() => {
-        session.messages.push({
-          id: uid(),
-          type: 'reasoning',
-          text: 'Evaluating load-bearing requirements for the South Wing...',
-        })
-      }, 600)
+    removeMessage(id) {
+      this.messages = this.messages.filter(m => m.id !== id)
+    },
 
-      setTimeout(() => {
-        session.messages.push({
-          id: uid(),
-          type: 'ai',
-          text: 'Based on my analysis, here is the summary.',
-        })
-        this.isTyping = false
-      }, 1800)
+    setSessions(list) {
+      this.sessions = list.map(s => ({ ...s, date: getDateLabel(s.createdAt) }))
+      if (!this.sessions.find(s => s.id === this.activeSessionId)) {
+        this.activeSessionId = this.sessions[0]?.id ?? ''
+      }
+    },
+
+    setMessages(sessionId, list) {
+      this.messages = this.messages.filter(m => m.sessionId !== sessionId).concat(list)
     },
   },
 })

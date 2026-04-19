@@ -1,9 +1,7 @@
 <template>
   <view class="page">
-    <!-- Status bar spacer -->
     <view class="status-bar-spacer" />
 
-    <!-- Content area -->
     <view class="content">
       <!-- Logo block -->
       <view class="logo-block">
@@ -23,7 +21,7 @@
             v-model="phone"
             class="text-input"
             type="tel"
-            placeholder="Phone number"
+            placeholder="手机号"
             placeholder-class="ph"
           />
         </view>
@@ -33,42 +31,45 @@
           <view class="input-row input-row--flex">
             <text class="input-icon">🔐</text>
             <input
-              v-model="code"
+              v-model="smsCode"
               class="text-input"
               type="number"
-              placeholder="Verification code"
+              placeholder="短信验证码"
               placeholder-class="ph"
             />
           </view>
           <view
             class="get-code-btn"
-            :class="countdown > 0 ? 'get-code-btn--disabled' : ''"
-            @tap="startCountdown"
+            :class="countdown > 0 || loading ? 'get-code-btn--disabled' : ''"
+            @tap="onGetCode"
           >
             <text class="get-code-text">
-              {{ countdown > 0 ? `${countdown}s` : 'Get Code' }}
+              {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
             </text>
           </view>
         </view>
 
         <!-- Login button -->
-        <view class="login-btn" @tap="handleLogin">
-          <text class="login-btn-text">Login</text>
-          <text class="login-btn-arrow">→</text>
-        </view>
-      </view>
-
-      <!-- Secondary links (decorative) -->
-      <view class="links">
-        <text class="link-text">Forgot password?</text>
-        <view class="signup-row">
-          <text class="link-muted">Don't have an account? </text>
-          <text class="link-text">Sign Up</text>
+        <view class="login-btn" :class="loading ? 'login-btn--disabled' : ''" @tap="handleLogin">
+          <text class="login-btn-text">{{ loading ? '登录中...' : '登 录' }}</text>
+          <text v-if="!loading" class="login-btn-arrow">→</text>
         </view>
       </view>
     </view>
 
-    <!-- Bottom wave decoration -->
+    <!-- Slider captcha modal -->
+    <view v-if="showCaptcha" class="captcha-modal" @tap="showCaptcha = false">
+      <view class="captcha-card" @tap.stop>
+        <SliderCaptcha
+          :bg-img="captcha.bgImg"
+          :piece-img="captcha.pieceImg"
+          :ori-image-width="captcha.oriImageWidth"
+          @success="onSliderSuccess"
+          @cancel="showCaptcha = false"
+        />
+      </view>
+    </view>
+
     <view class="wave-wrap">
       <image src="/static/wave.svg" class="wave-img" mode="scaleToFill" />
     </view>
@@ -77,15 +78,82 @@
 
 <script setup>
 import { ref, onUnmounted } from 'vue'
+import SliderCaptcha from '@/components/SliderCaptcha.vue'
+import { useAuth } from '@/composables/useAuth.js'
+import { getCaptchaApi, sendSmsCodeApi } from '@/api/login.js'
 
-const phone = ref('')
-const code  = ref('')
+const auth = useAuth()
+
+const phone = ref(uni.getStorageSync('jclaw_last_phone') || '')
+const smsCode = ref('')
 const countdown = ref(0)
+const loading = ref(false)
+const showCaptcha = ref(false)
+const captcha = ref({ bgImg: '', pieceImg: '', oriImageWidth: 320, uuid: '' })
 
 let countdownTimer = null
+let smsUuid = ''
+
+async function onGetCode() {
+  if (countdown.value > 0 || loading.value) return
+  const p = phone.value.trim()
+  if (!p) {
+    uni.showToast({ title: '请输入手机号', icon: 'none' })
+    return
+  }
+  try {
+    loading.value = true
+    const res = await getCaptchaApi()
+    const data = res.data || res
+    captcha.value = {
+      bgImg: data.img || data.bgImage || '',
+      pieceImg: data.smallImage || data.pieceImage || '',
+      oriImageWidth: data.oriImageWidth || 320,
+      uuid: data.uuid || '',
+    }
+    showCaptcha.value = true
+  } catch (e) {
+    uni.showToast({ title: e?.errMsg || '获取验证码失败', icon: 'none' })
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onSliderSuccess(distance) {
+  showCaptcha.value = false
+  const p = phone.value.trim()
+  try {
+    loading.value = true
+    const res = await sendSmsCodeApi({
+      phoneNumber: p,
+      uuid: captcha.value.uuid,
+      code: distance,
+      sendType: 1,
+    })
+    const data = res.data || res
+    smsUuid = data.uuid || data.smsUuid || ''
+    startCountdown()
+    uni.showToast({ title: '验证码已发送', icon: 'success' })
+  } catch (e) {
+    uni.showToast({ title: e?.errMsg || '发送失败，请重试', icon: 'none' })
+    // Refresh captcha on failure
+    try {
+      const res2 = await getCaptchaApi()
+      const d = res2.data || res2
+      captcha.value = {
+        bgImg: d.img || d.bgImage || '',
+        pieceImg: d.smallImage || d.pieceImage || '',
+        oriImageWidth: d.oriImageWidth || 320,
+        uuid: d.uuid || '',
+      }
+      showCaptcha.value = true
+    } catch {}
+  } finally {
+    loading.value = false
+  }
+}
 
 function startCountdown() {
-  if (countdown.value > 0) return
   countdown.value = 60
   countdownTimer = setInterval(() => {
     countdown.value -= 1
@@ -96,12 +164,27 @@ function startCountdown() {
   }, 1000)
 }
 
-function handleLogin() {
-  if (!phone.value.trim() || !code.value.trim()) {
-    uni.showToast({ title: 'Please fill in all fields', icon: 'none' })
+async function handleLogin() {
+  if (loading.value) return
+  const p = phone.value.trim()
+  const c = smsCode.value.trim()
+  if (!p || !c) {
+    uni.showToast({ title: '请填写手机号和验证码', icon: 'none' })
     return
   }
-  uni.reLaunch({ url: '/pages/chat/chat' })
+  if (!smsUuid) {
+    uni.showToast({ title: '请先获取验证码', icon: 'none' })
+    return
+  }
+  try {
+    loading.value = true
+    await auth.loginByMobile(p, c, smsUuid)
+    uni.reLaunch({ url: '/pages/chat/chat' })
+  } catch (e) {
+    uni.showToast({ title: e?.message || '登录失败', icon: 'none' })
+  } finally {
+    loading.value = false
+  }
 }
 
 onUnmounted(() => {
@@ -134,7 +217,6 @@ onUnmounted(() => {
   padding: 0 60rpx;
 }
 
-/* Logo */
 .logo-block {
   display: flex;
   flex-direction: column;
@@ -172,7 +254,6 @@ onUnmounted(() => {
   margin-top: 12rpx;
 }
 
-/* Form */
 .form {
   width: 100%;
   display: flex;
@@ -249,6 +330,8 @@ onUnmounted(() => {
   border-radius: $radius-xl;
   padding: 32rpx;
   box-shadow: 0 8rpx 24rpx rgba($primary, 0.3);
+
+  &--disabled { opacity: 0.7; }
 }
 
 .login-btn-text {
@@ -262,32 +345,25 @@ onUnmounted(() => {
   color: $on-primary;
 }
 
-/* Links */
-.links {
-  margin-top: 48rpx;
+/* Captcha modal */
+.captcha-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 20rpx;
+  justify-content: center;
+  z-index: 999;
 }
 
-.link-text {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: $primary;
+.captcha-card {
+  width: 660rpx;
+  border-radius: $radius-xl;
+  overflow: hidden;
+  background: $surface;
+  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.2);
 }
 
-.signup-row {
-  display: flex;
-  flex-direction: row;
-}
-
-.link-muted {
-  font-size: 26rpx;
-  color: $on-surface-variant;
-}
-
-/* Wave */
 .wave-wrap {
   position: absolute;
   bottom: 0;

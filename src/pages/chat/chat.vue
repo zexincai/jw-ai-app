@@ -1,20 +1,17 @@
 <template>
   <view class="page">
-    <!-- Status bar spacer -->
     <view class="status-bar-spacer" />
 
-    <!-- Top App Bar -->
     <view class="topbar">
       <view class="topbar-btn" @tap="drawerVisible = true">
         <image src="/static/icon-menu.svg" class="topbar-icon" mode="aspectFit" />
       </view>
       <text class="topbar-title">Project Architect</text>
-      <!-- <view class="topbar-btn" @tap="handleNewChat">
+      <view class="topbar-btn" @tap="handleNewChat">
         <image src="/static/icon-add.svg" class="topbar-icon" mode="aspectFit" />
-      </view> -->
+      </view>
     </view>
 
-    <!-- Message list -->
     <scroll-view
       scroll-y
       class="message-list"
@@ -22,13 +19,12 @@
     >
       <view class="message-list-inner">
         <ChatBubble
-          v-for="msg in store.currentMessages"
+          v-for="msg in store.activeMessages"
           :key="msg.id"
           :message="msg"
         />
 
-        <!-- Typing indicator -->
-        <view v-if="store.isTyping" class="typing-row">
+        <view v-if="store.aiReplying && store.activeMessages.at(-1)?.status !== 'streaming'" class="typing-row">
           <view class="typing-icon">
             <text class="typing-icon-text">AI</text>
           </view>
@@ -39,21 +35,18 @@
           </view>
         </view>
 
-        <!-- Scroll anchor -->
         <view id="msg-bottom" class="scroll-anchor" />
       </view>
     </scroll-view>
 
-    <!-- Input bar -->
     <InputBar @send="handleSend" />
 
-    <!-- Drawer navigation (sibling to scroll-view, NOT inside it) -->
     <DrawerNav
       :visible="drawerVisible"
       :sessions="store.sessions"
       :active-session-id="store.activeSessionId"
-      :roles="store.roles"
-      :active-role-id="store.activeRoleId"
+      :roles="auth.roles.value"
+      :active-role-id="auth.currentRoleId.value"
       @close="drawerVisible = false"
       @select-session="handleSelectSession"
       @select-role="handleSelectRole"
@@ -63,42 +56,63 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import { useAuth } from '@/composables/useAuth.js'
+import { useWukongIM } from '@/composables/useWukongIM.js'
+import { useChat } from '@/composables/useChat.js'
 import ChatBubble from '@/components/ChatBubble.vue'
 import InputBar from '@/components/InputBar.vue'
 import DrawerNav from '@/components/DrawerNav.vue'
 
 const store = useChatStore()
+const auth = useAuth()
+const wkIM = useWukongIM()
+const chat = useChat()
 const drawerVisible = ref(false)
 const scrollTarget = ref('')
 
-// Auto-scroll to bottom whenever messages are added
 watch(
-  () => store.currentMessages.length,
+  () => store.activeMessages.length,
   () => {
     scrollTarget.value = ''
-    nextTick(() => {
-      scrollTarget.value = 'msg-bottom'
-    })
+    nextTick(() => { scrollTarget.value = 'msg-bottom' })
   }
 )
 
-function handleSend(text) {
-  store.sendMessage(text)
+onMounted(async () => {
+  await chat.loadSessions()
+  if (store.activeSessionId) {
+    await chat.loadSession(store.activeSessionId)
+  }
+  // Connect WUKONGIM if not already connected
+  const role = auth.currentRole.value
+  if (role && wkIM.status.value !== 'connected') {
+    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+  }
+})
+
+function handleSend({ text, attachments }) {
+  if (!text?.trim() && !attachments?.length) return
+  chat.send(text || '', attachments || [])
 }
 
-function handleSelectSession(id) {
-  store.switchSession(id)
+async function handleSelectSession(id) {
+  await chat.loadSession(id)
   drawerVisible.value = false
 }
 
-function handleSelectRole(id) {
-  store.switchRole(id)
+async function handleSelectRole(id) {
+  await auth.switchRole(id)
+  const role = auth.currentRole.value
+  if (role) {
+    wkIM.disconnect()
+    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+  }
 }
 
 function handleNewChat() {
-  store.newSession()
+  store.newLocalSession()
   drawerVisible.value = false
 }
 </script>
@@ -120,7 +134,6 @@ function handleNewChat() {
   flex-shrink: 0;
 }
 
-/* TopAppBar */
 .topbar {
   display: flex;
   flex-direction: row;
@@ -153,7 +166,6 @@ function handleNewChat() {
   color: $primary;
 }
 
-/* Message list */
 .message-list {
   flex: 1;
   overflow: hidden;
@@ -167,7 +179,6 @@ function handleNewChat() {
   height: 2rpx;
 }
 
-/* Typing indicator */
 .typing-row {
   display: flex;
   flex-direction: row;

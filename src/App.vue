@@ -1,15 +1,37 @@
 <script setup>
-import { onLaunch } from '@dcloudio/uni-app'
+import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
+import { useAuth } from '@/composables/useAuth.js'
+import { useWukongIM } from '@/composables/useWukongIM.js'
 
 onLaunch(() => {
   // #ifdef H5
-  // Native App provides --status-bar-height automatically; H5 needs manual assignment
   const info = uni.getSystemInfoSync()
   document.documentElement.style.setProperty(
     '--status-bar-height',
     info.statusBarHeight + 'px'
   )
   // #endif
+
+  // Auto-connect if already logged in
+  const auth = useAuth()
+  const wkIM = useWukongIM()
+  const role = auth.currentRole.value
+  if (auth.isLoggedIn.value && role) {
+    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+  }
+})
+
+onShow(() => {
+  const auth = useAuth()
+  const wkIM = useWukongIM()
+  if (auth.isLoggedIn.value && wkIM.status.value === 'disconnected') {
+    wkIM.reconnect()
+  }
+})
+
+onHide(() => {
+  const wkIM = useWukongIM()
+  wkIM.disconnect()
 })
 </script>
 

@@ -1,40 +1,67 @@
 <template>
   <!-- User bubble -->
-  <view v-if="message.type === 'user'" class="bubble-row bubble-row--right">
-    <view class="bubble bubble--user">
-      <text class="bubble-text">{{ message.text }}</text>
+  <view v-if="message.role === 'user'" class="bubble-row bubble-row--right">
+    <!-- Attachments -->
+    <view v-if="message.attachments?.length" class="attach-list attach-list--user">
+      <view v-for="att in message.attachments" :key="att.url || att.name" class="attach-item">
+        <image v-if="att.mimeType?.startsWith('image/')" :src="att.previewUrl || att.url" class="attach-img" mode="aspectFill" />
+        <text v-else class="attach-file">📄 {{ att.name }}</text>
+      </view>
+    </view>
+    <view v-if="message.content" class="bubble bubble--user">
+      <text class="bubble-text">{{ message.content }}</text>
     </view>
   </view>
 
-  <!-- Reasoning bubble -->
-  <view v-else-if="message.type === 'reasoning'" class="bubble-row bubble-row--left">
-    <view class="bubble bubble--reasoning">
-      <text class="reasoning-label">推理引擎</text>
-      <text class="bubble-text reasoning-text">{{ message.text }}</text>
-    </view>
-  </view>
-
-  <!-- AI bubble -->
-  <view v-else-if="message.type === 'ai'" class="bubble-row bubble-row--left">
+  <!-- Assistant bubble -->
+  <view v-else class="bubble-row bubble-row--left">
     <view class="ai-icon">
       <text class="ai-icon-text">AI</text>
     </view>
-    <view class="bubble bubble--ai">
-      <text class="bubble-text">{{ message.text }}</text>
-      <MaterialTable v-if="message.table" :rows="message.table.rows" />
+    <view class="bubble-wrap">
+      <!-- Thinking block -->
+      <view v-if="message.thinking?.trim()" class="thinking-block">
+        <view class="thinking-header" @tap="thinkingOpen = !thinkingOpen">
+          <text class="thinking-label">推理过程</text>
+          <text class="thinking-toggle">{{ thinkingOpen ? '▲' : '▼' }}</text>
+        </view>
+        <view v-if="thinkingOpen" class="thinking-body">
+          <text class="thinking-text">{{ message.thinking }}</text>
+        </view>
+      </view>
+
+      <!-- Streaming dots when no content yet -->
+      <view v-if="message.status === 'streaming' && !message.content" class="typing-bubble">
+        <view class="dot" />
+        <view class="dot dot--2" />
+        <view class="dot dot--3" />
+      </view>
+
+      <!-- Content -->
+      <view v-if="message.content" class="bubble bubble--ai">
+        <MarkdownContent :content="message.content" />
+      </view>
+
+      <!-- Attachments -->
+      <view v-if="message.attachments?.length" class="attach-list">
+        <view v-for="att in message.attachments" :key="att.url || att.name" class="attach-item">
+          <image v-if="att.mimeType?.startsWith('image/')" :src="att.previewUrl || att.url" class="attach-img" mode="aspectFill" />
+          <text v-else class="attach-file">📄 {{ att.name }}</text>
+        </view>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup>
-import MaterialTable from './MaterialTable.vue'
+import { ref } from 'vue'
+import MarkdownContent from './MarkdownContent.vue'
 
 defineProps({
-  message: {
-    type: Object,
-    required: true,
-  },
+  message: { type: Object, required: true },
 })
+
+const thinkingOpen = ref(false)
 </script>
 
 <style lang="scss" scoped>
@@ -44,8 +71,17 @@ defineProps({
   display: flex;
   flex-direction: row;
   margin-bottom: 24rpx;
-  &--right { justify-content: flex-end; }
-  &--left  { justify-content: flex-start; align-items: flex-start; }
+
+  &--right {
+    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  &--left {
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
 }
 
 .bubble {
@@ -57,14 +93,6 @@ defineProps({
     max-width: 80%;
   }
 
-  &--reasoning {
-    background-color: transparent;
-    border-left: 6rpx solid rgba($primary, 0.4);
-    padding-left: 24rpx;
-    padding-right: 0;
-    max-width: 100%;
-  }
-
   &--ai {
     background-color: $surface-container-lowest;
     border-radius: $radius-xl;
@@ -72,6 +100,11 @@ defineProps({
     box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
     padding: 24rpx;
   }
+}
+
+.bubble-wrap {
+  flex: 1;
+  max-width: 95%;
 }
 
 .bubble-text {
@@ -82,21 +115,6 @@ defineProps({
 
 .bubble--user .bubble-text {
   color: $on-primary-container;
-}
-
-.reasoning-label {
-  display: block;
-  font-size: 20rpx;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 2rpx;
-  color: $primary;
-  margin-bottom: 8rpx;
-}
-
-.reasoning-text {
-  font-style: italic;
-  color: $on-surface-variant;
 }
 
 .ai-icon {
@@ -116,5 +134,101 @@ defineProps({
   color: $on-primary;
   font-size: 20rpx;
   font-weight: 700;
+}
+
+/* Thinking block */
+.thinking-block {
+  border-left: 6rpx solid rgba($primary, 0.4);
+  margin-bottom: 16rpx;
+  padding-left: 20rpx;
+}
+
+.thinking-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  padding: 8rpx 0;
+}
+
+.thinking-label {
+  font-size: 22rpx;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2rpx;
+  color: $primary;
+}
+
+.thinking-toggle {
+  font-size: 20rpx;
+  color: $on-surface-variant;
+}
+
+.thinking-body {
+  padding: 8rpx 0 12rpx;
+}
+
+.thinking-text {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: $on-surface-variant;
+  font-style: italic;
+}
+
+/* Streaming dots */
+.typing-bubble {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+  background-color: $surface-container-lowest;
+  padding: 20rpx 28rpx;
+  border-radius: $radius-xl;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  width: fit-content;
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background-color: $outline;
+  animation: bounce 1.2s infinite;
+
+  &--2 { animation-delay: 0.2s; }
+  &--3 { animation-delay: 0.4s; }
+}
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%            { transform: translateY(-10rpx); }
+}
+
+/* Attachments */
+.attach-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.attach-item {
+  border-radius: $radius-lg;
+  overflow: hidden;
+}
+
+.attach-img {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: $radius-lg;
+}
+
+.attach-file {
+  font-size: 24rpx;
+  color: $primary;
+  background: $primary-container;
+  padding: 12rpx 20rpx;
+  border-radius: $radius-lg;
 }
 </style>
