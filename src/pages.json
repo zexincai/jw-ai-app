@@ -1,0 +1,23 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/chat/chat",
+      "style": {
+        "navigationBarTitleText": "",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarBackgroundColor": "#f7f9fb",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f9fb"
+  }
+}

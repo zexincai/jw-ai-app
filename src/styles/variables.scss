@@ -1,0 +1,48 @@
+// --- Primary ---
+$primary:                  #005fae;
+$on-primary:               #ffffff;
+$primary-container:        #4b9bfa;
+$on-primary-container:     #00325f;
+$primary-fixed:            #d4e3ff;
+$primary-fixed-dim:        #a5c8ff;
+$on-primary-fixed-variant: #004785;
+
+// --- Secondary ---
+$secondary:                #466084;
+$on-secondary:             #ffffff;
+$secondary-container:      #b9d3fd;
+$on-secondary-container:   #415b7f;
+
+// --- Surface ---
+$surface:                  #f7f9fb;
+$surface-dim:              #d8dadc;
+$surface-container-lowest: #ffffff;
+$surface-container-low:    #f2f4f6;
+$surface-container:        #eceef0;
+$surface-container-high:   #e6e8ea;
+$surface-container-highest:#e0e3e5;
+
+// --- On-surface ---
+$on-surface:               #191c1e;
+$on-surface-variant:       #414752;
+
+// --- Error ---
+$error:                    #ba1a1a;
+$error-container:          #ffdad6;
+$on-error-container:       #93000a;
+
+// --- Outline ---
+$outline:                  #717783;
+$outline-variant:          #c1c7d4;
+
+// --- Border Radius ---
+$radius-sm:   8rpx;
+$radius-md:   12rpx;
+$radius-lg:   16rpx;
+$radius-xl:   24rpx;
+$radius-2xl:  32rpx;
+$radius-full: 9999rpx;
+
+// --- Typography ---
+$font-headline: 'PingFang SC', 'Helvetica Neue', sans-serif;
+$font-body:     'PingFang SC', 'Helvetica Neue', sans-serif;
