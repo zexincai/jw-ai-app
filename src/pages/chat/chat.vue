@@ -9,9 +9,9 @@
         <image src="/static/icon-menu.svg" class="topbar-icon" mode="aspectFit" />
       </view>
       <text class="topbar-title">Project Architect</text>
-      <view class="topbar-btn" @tap="handleNewChat">
+      <!-- <view class="topbar-btn" @tap="handleNewChat">
         <image src="/static/icon-add.svg" class="topbar-icon" mode="aspectFit" />
-      </view>
+      </view> -->
     </view>
 
     <!-- Message list -->
@@ -52,8 +52,11 @@
       :visible="drawerVisible"
       :sessions="store.sessions"
       :active-session-id="store.activeSessionId"
+      :roles="store.roles"
+      :active-role-id="store.activeRoleId"
       @close="drawerVisible = false"
       @select-session="handleSelectSession"
+      @select-role="handleSelectRole"
       @new-chat="handleNewChat"
     />
   </view>
@@ -88,6 +91,10 @@ function handleSend(text) {
 function handleSelectSession(id) {
   store.switchSession(id)
   drawerVisible.value = false
+}
+
+function handleSelectRole(id) {
+  store.switchRole(id)
 }
 
 function handleNewChat() {

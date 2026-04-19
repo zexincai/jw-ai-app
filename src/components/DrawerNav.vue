@@ -5,47 +5,70 @@
   <!-- Sliding panel -->
   <view class="drawer-panel" :class="visible ? 'drawer-panel--open' : ''" @tap.stop>
     <view class="drawer-inner">
-      <!-- Search (non-functional this phase) -->
-      <view class="search-row">
-        <view class="search-box">
-          <text class="search-icon">🔍</text>
-          <input class="search-input" placeholder="Search sessions..." placeholder-class="ph" disabled />
+      <!-- Two column layout: roles + sessions -->
+      <view class="drawer-content">
+        <!-- Role list column -->
+        <view class="role-column">
+          <text class="column-label">Roles</text>
+          <view
+            v-for="role in roles"
+            :key="role.id"
+            class="role-item"
+            :class="role.id === activeRoleId ? 'role-item--active' : ''"
+            @tap="selectRole(role.id)"
+          >
+            <view class="role-avatar">
+              <text class="role-avatar-text">{{ role.avatar }}</text>
+            </view>
+            <text class="role-name">{{ role.name }}</text>
+          </view>
         </view>
-        <view class="new-btn" @tap="emit('new-chat')">
-          <image src="/static/icon-add.svg" class="new-icon" mode="aspectFit" />
+
+        <!-- Session list column -->
+        <view class="session-column">
+          <!-- Search (non-functional this phase) -->
+          <view class="search-row">
+            <view class="search-box">
+              <text class="search-icon">🔍</text>
+              <input class="search-input" placeholder="Search sessions..." placeholder-class="ph" disabled />
+            </view>
+            <view class="new-btn" @tap="emit('new-chat')">
+              <image src="/static/icon-add.svg" class="new-icon" mode="aspectFit" />
+            </view>
+          </view>
+
+          <!-- Session list -->
+          <scroll-view scroll-y class="session-list">
+            <!-- Today -->
+            <view v-if="todaySessions.length">
+              <text class="group-label">Today</text>
+              <view
+                v-for="s in todaySessions"
+                :key="s.id"
+                class="session-item"
+                :class="s.id === activeSessionId ? 'session-item--active' : ''"
+                @tap="selectSession(s.id)"
+              >
+                <text class="session-title">{{ s.title }}</text>
+              </view>
+            </view>
+
+            <!-- Yesterday -->
+            <view v-if="yesterdaySessions.length">
+              <text class="group-label">Yesterday</text>
+              <view
+                v-for="s in yesterdaySessions"
+                :key="s.id"
+                class="session-item"
+                :class="s.id === activeSessionId ? 'session-item--active' : ''"
+                @tap="selectSession(s.id)"
+              >
+                <text class="session-title">{{ s.title }}</text>
+              </view>
+            </view>
+          </scroll-view>
         </view>
       </view>
-
-      <!-- Session list -->
-      <scroll-view scroll-y class="session-list">
-        <!-- Today -->
-        <view v-if="todaySessions.length">
-          <text class="group-label">Today</text>
-          <view
-            v-for="s in todaySessions"
-            :key="s.id"
-            class="session-item"
-            :class="s.id === activeSessionId ? 'session-item--active' : ''"
-            @tap="selectSession(s.id)"
-          >
-            <text class="session-title">{{ s.title }}</text>
-          </view>
-        </view>
-
-        <!-- Yesterday -->
-        <view v-if="yesterdaySessions.length">
-          <text class="group-label">Yesterday</text>
-          <view
-            v-for="s in yesterdaySessions"
-            :key="s.id"
-            class="session-item"
-            :class="s.id === activeSessionId ? 'session-item--active' : ''"
-            @tap="selectSession(s.id)"
-          >
-            <text class="session-title">{{ s.title }}</text>
-          </view>
-        </view>
-      </scroll-view>
 
       <!-- Footer user info -->
       <view class="footer">
@@ -71,18 +94,24 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  visible:         { type: Boolean, required: true },
-  sessions:        { type: Array,   required: true },
-  activeSessionId: { type: String,  required: true },
+  visible:          { type: Boolean, required: true },
+  sessions:         { type: Array,   required: true },
+  activeSessionId:  { type: String,  required: true },
+  roles:            { type: Array,   required: true },
+  activeRoleId:     { type: String,  required: true },
 })
 
-const emit = defineEmits(['close', 'select-session', 'new-chat'])
+const emit = defineEmits(['close', 'select-session', 'select-role', 'new-chat'])
 
 const todaySessions     = computed(() => props.sessions.filter(s => s.date === 'today'))
 const yesterdaySessions = computed(() => props.sessions.filter(s => s.date === 'yesterday'))
 
 function selectSession(id) {
   emit('select-session', id)
+}
+
+function selectRole(id) {
+  emit('select-role', id)
 }
 </script>
 
@@ -117,6 +146,84 @@ function selectSession(id) {
   flex-direction: column;
   height: 100%;
   padding-top: var(--status-bar-height, 44px);
+}
+
+.drawer-content {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  overflow: hidden;
+}
+
+.role-column {
+  width: 180rpx;
+  border-right: 2rpx solid $surface-container;
+  display: flex;
+  background-color: #f3f3f3;
+  flex-direction: column;
+  padding: 16rpx 12rpx;
+  flex-shrink: 0;
+}
+
+.column-label {
+  font-size: 20rpx;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2rpx;
+  color: $outline;
+  padding: 0 8rpx 16rpx;
+}
+
+.role-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16rpx 8rpx;
+  border-radius: $radius-lg;
+  margin-bottom: 8rpx;
+
+  &--active {
+    background-color: rgba($primary, 0.1);
+  }
+}
+
+.role-avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: $radius-xl;
+  background-color: $primary-container;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8rpx;
+}
+
+.role-avatar-text {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: $on-primary-container;
+}
+
+.role-name {
+  font-size: 20rpx;
+  color: $on-surface;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.role-item--active .role-name {
+  color: $primary;
+  font-weight: 600;
+}
+
+.session-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .search-row {
@@ -172,6 +279,7 @@ function selectSession(id) {
 .session-list {
   flex: 1;
   padding: 0 16rpx;
+  overflow: hidden;
 }
 
 .group-label {
@@ -210,6 +318,7 @@ function selectSession(id) {
 
 .footer {
   padding: 24rpx;
+  margin-bottom: 20rpx;
   border-top: 2rpx solid $surface-container;
   padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom);
@@ -259,6 +368,7 @@ function selectSession(id) {
   background-color: $surface-container-lowest;
   border-radius: $radius-lg;
   border: 2rpx solid rgba($outline-variant, 0.3);
+  margin-top: 16rpx;
 }
 
 .settings-text {

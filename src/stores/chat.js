@@ -5,6 +5,11 @@ function uid() {
   return String(++_nextId)
 }
 
+const ROLES = [
+  { id: 'DA', name: 'Digital Architect', avatar: 'DA' },
+  { id: 'LP', name: 'Lead Planner',      avatar: 'LP' },
+]
+
 const MOCK_SESSIONS = [
   {
     id: '1',
@@ -43,6 +48,8 @@ const MOCK_SESSIONS = [
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
+    roles: ROLES,
+    activeRoleId: 'DA',
     sessions: MOCK_SESSIONS.map(s => ({ ...s, messages: [...s.messages] })),
     activeSessionId: '1',
     isTyping: false,
@@ -53,11 +60,18 @@ export const useChatStore = defineStore('chat', {
       const session = state.sessions.find(s => s.id === state.activeSessionId)
       return session ? session.messages : []
     },
+    currentRole(state) {
+      return state.roles.find(r => r.id === state.activeRoleId) || state.roles[0]
+    },
   },
 
   actions: {
     switchSession(id) {
       this.activeSessionId = id
+    },
+
+    switchRole(id) {
+      this.activeRoleId = id
     },
 
     newSession() {
