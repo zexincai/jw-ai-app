@@ -40,20 +40,6 @@ function stripActionTags(text) {
     .trim()
 }
 
-function persistMessages(sessionId, messages) {
-  try {
-    uni.setStorageSync(`jclaw_msgs_${sessionId}`, JSON.stringify(messages))
-  } catch {}
-}
-
-function loadCachedMessages(sessionId) {
-  try {
-    const raw = uni.getStorageSync(`jclaw_msgs_${sessionId}`)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
 
 export function useChat() {
   const store = useChatStore()
@@ -104,7 +90,13 @@ export function useChat() {
       const msg = store.messages.find(m => m.id === _streamingId)
       if (msg) {
         store.upsertMessage({ ...msg, status: 'done' })
-        persistMessages(msg.sessionId, store.activeMessages)
+        if (_currentChatId && msg.content) {
+          addChatRecordData({
+            fkChatId: _currentChatId,
+            chatContent: msg.content,
+            chatObject: '1',
+          }).catch(() => {})
+        }
       }
       _streamingId = null
       _doneTimer = null
@@ -144,14 +136,15 @@ export function useChat() {
 
     // Update session title
     const session = store.sessions.find(s => s.id === sessionId)
-    if (session && session.title === '新对话' && text) {
-      session.title = text.slice(0, 20)
+    const hasContent = text || attachments.length > 0
+    if (session && session.title === '新对话' && hasContent) {
+      session.title = text ? text.slice(0, 20) : '语音消息'
     }
 
     // Ensure backend session
-    if (session && !session.backendId) {
+    if (session && !session.backendId && hasContent) {
       try {
-        const res = await addChat({ chatTitle: text ? text.slice(0, 50) : '新对话' })
+        const res = await addChat({ chatTitle: text ? text.slice(0, 50) : '语音消息' })
         const pkId = (res.data || res)
         if (pkId) session.backendId = typeof pkId === 'object' ? pkId.pkId : pkId
       } catch {}
@@ -168,17 +161,18 @@ export function useChat() {
     const sysBlock = sysLines ? `<system>\n${sysLines}\n</system>\n\n` : ''
 
     // Save user msg to backend
-    if (_currentChatId) {
+    if (_currentChatId && hasContent) {
       addChatRecordData({
         fkChatId: _currentChatId,
-        chatContent: sysBlock + text,
+        chatContent: sysBlock + (text || ''),
         chatObject: '0',
         ...(attachments.length ? {
-          chatRecordFileList: attachments.map(a => ({
-            fileName: a.name,
-            fileType: a.mimeType.startsWith('image/') ? '0' : a.mimeType.startsWith('audio/') ? '2' : '1',
-            fileUrl: a.url || a.data,
-          })),
+          chatRecordFileList: attachments.map(a => {
+            let fileType = 1
+            if (a.mimeType.startsWith('image/')) fileType = 0
+            else if (a.mimeType.startsWith('audio/')) fileType = 2
+            return { fileName: a.name, fileType: String(fileType), fileUrl: a.url || a.data }
+          }),
         } : {}),
       }).catch(() => {})
     }
@@ -190,13 +184,15 @@ export function useChat() {
         .filter(a => a.mimeType.startsWith('image/'))
         .map(a => `![${a.name}](${a.url || a.data})`)
         .join('\n')
-      const files = attachments
-        .filter(a => !a.mimeType.startsWith('image/') && !a.mimeType.startsWith('audio/'))
-        .map(a => `[📄 ${a.name}](${a.url || a.data})`)
-        .join('\n')
+      // 当 text 非空时（即语音转文字路径），音频 URL 不发给 AI
+      // 音频已通过 chatRecordFileList 存档到后端
       const audio = text ? '' : attachments
         .filter(a => a.mimeType.startsWith('audio/'))
-        .map(a => `[🎵 语音](${a.url || a.data})`)
+        .map(a => { const u = a.url || a.data; return `[\uD83C\uDFB5 语音消息，URL: ${u}](${u})` })
+        .join('\n')
+      const files = attachments
+        .filter(a => !a.mimeType.startsWith('image/') && !a.mimeType.startsWith('audio/'))
+        .map(a => `[📄 文件: ${a.name}](${a.url || a.data})`)
         .join('\n')
       const media = [imgs, audio, files].filter(Boolean).join('\n')
       if (media) textToSend = media + (text ? '\n' + text : '')
@@ -229,11 +225,6 @@ export function useChat() {
 
   async function loadSession(sessionId) {
     store.switchSession(sessionId)
-    const cached = loadCachedMessages(sessionId)
-    if (cached?.length) {
-      store.setMessages(sessionId, cached)
-      return
-    }
     const session = store.sessions.find(s => s.id === sessionId)
     if (!session?.backendId) return
     try {
@@ -250,18 +241,23 @@ export function useChat() {
             content: stripActionTags(raw),
             status: 'done',
             createdAt: r.createTime || new Date().toISOString(),
-            attachments: r.chatRecordFileList?.length ? r.chatRecordFileList.map(f => ({
-              name: f.fileName || 'file',
-              mimeType: f.fileType === '0' ? 'image/png' : f.fileType === '2' ? 'audio/mp3' : 'application/octet-stream',
-              url: f.fileUrl || '',
-              previewUrl: f.fileType === '0' ? f.fileUrl : undefined,
-            })) : undefined,
+            attachments: r.chatRecordFileList?.length ? r.chatRecordFileList.map(f => {
+              const ft = String(f.fileType)
+              return {
+                name: f.fileName || 'file',
+                mimeType: ft === '0' ? 'image/png'
+                  : ft === '2' || /\.(wav|mp3|aac|m4a|ogg|webm|flac)$/i.test(f.fileName || '')
+                    ? 'audio/wav'
+                    : 'application/octet-stream',
+                url: f.fileUrl || '',
+                previewUrl: ft === '0' ? f.fileUrl : undefined,
+              }
+            }) : undefined,
           }
         })
         .filter(m => m.content.trim() || m.attachments)
         .reverse()
       store.setMessages(sessionId, msgs)
-      persistMessages(sessionId, msgs)
     } catch {}
   }
 
@@ -272,7 +268,6 @@ export function useChat() {
     }
     store.sessions = store.sessions.filter(s => s.id !== sessionId)
     store.messages = store.messages.filter(m => m.sessionId !== sessionId)
-    try { uni.removeStorageSync(`jclaw_msgs_${sessionId}`) } catch {}
     if (store.activeSessionId === sessionId) {
       store.activeSessionId = store.sessions[0]?.id ?? ''
     }

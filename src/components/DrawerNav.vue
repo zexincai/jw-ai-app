@@ -5,40 +5,28 @@
   <!-- Sliding panel -->
   <view class="drawer-panel" :class="visible ? 'drawer-panel--open' : ''" @tap.stop>
     <view class="drawer-inner">
-      <!-- Two column layout: roles + sessions -->
-      <view class="drawer-content">
-        <!-- Role list column: only avatars, scrollable -->
-        <view class="role-column">
-          <text class="column-label"></text>
-          <scroll-view scroll-y class="role-list">
-            <view
-              v-for="role in roles"
-              :key="role.id"
-              class="role-item"
-              @tap="selectRole(role.id)"
-            >
-              <view class="role-avatar" :class="role.id === activeRoleId ? 'role-avatar--active' : ''">
-                <image v-if="role.avatarUrl" :src="role.avatarUrl" class="role-avatar-img" mode="aspectFill" />
-                <text v-else class="role-avatar-text">{{ role.avatar }}</text>
-              </view>
-            </view>
-          </scroll-view>
-        </view>
-
-        <!-- Session list column -->
-        <view class="session-column">
-          <!-- Active role name display -->
-          <view v-if="activeRole" class="role-name-row">
-            <view class="role-name-avatar">
-              <image v-if="activeRole.avatarUrl" :src="activeRole.avatarUrl" class="role-name-avatar-img" mode="aspectFill" />
-              <text v-else class="role-name-avatar-text">{{ activeRole.avatar }}</text>
-            </view>
-            <view class="role-name-info">
-              <text class="role-name-text">{{ activeRole.name }}</text>
-              <text v-if="activeRole.orgName" class="role-org-text">{{ activeRole.orgName }}</text>
+      <!-- Role list column: only avatars, full height -->
+      <view class="role-column">
+        <text class="column-label"></text>
+        <scroll-view scroll-y class="role-list">
+          <view
+            v-for="role in roles"
+            :key="role.id"
+            class="role-item"
+            @tap="selectRole(role.id)"
+          >
+            <view class="role-avatar" :class="role.id === activeRoleId ? 'role-avatar--active' : ''">
+              <image v-if="role.avatarUrl" :src="role.avatarUrl" class="role-avatar-img" mode="aspectFill" />
+              <text v-else class="role-avatar-text">{{ role.avatar }}</text>
             </view>
           </view>
+        </scroll-view>
+      </view>
 
+      <!-- Right column: sessions + footer -->
+      <view class="right-column">
+        <!-- Session list column -->
+        <view class="session-column">
           <!-- Search row -->
           <view class="search-row">
             <view class="search-box">
@@ -92,22 +80,22 @@
             </view>
           </scroll-view>
         </view>
-      </view>
 
-      <!-- Footer: shows active role info -->
-      <view class="footer">
-        <view class="user-row">
-          <view class="avatar">
-            <image v-if="activeRole?.avatarUrl" :src="activeRole.avatarUrl" class="footer-avatar-img" mode="aspectFill" />
-            <text v-else class="avatar-text">{{ activeRole?.avatar || 'AI' }}</text>
+        <!-- Footer: shows active role info -->
+        <view class="footer">
+          <view class="user-row">
+            <view class="avatar">
+              <image v-if="activeRole?.avatarUrl" :src="activeRole.avatarUrl" class="footer-avatar-img" mode="aspectFill" />
+              <text v-else class="avatar-text">{{ activeRole?.avatar || 'AI' }}</text>
+            </view>
+            <view class="user-info">
+              <text class="user-name">{{ activeRole?.name || 'AI Assistant' }}</text>
+              <text class="user-role">{{ activeRole?.orgName || activeRole?.telephone || '' }}</text>
+            </view>
           </view>
-          <view class="user-info">
-            <text class="user-name">{{ activeRole?.name || 'AI Assistant' }}</text>
-            <text class="user-role">{{ activeRole?.orgName || activeRole?.telephone || '' }}</text>
+          <view class="settings-btn" @tap="onSettings">
+            <text class="settings-text">⚙ 设置</text>
           </view>
-        </view>
-        <view class="settings-btn" @tap="onSettings">
-          <text class="settings-text">⚙ 设置</text>
         </view>
       </view>
     </view>
@@ -185,22 +173,13 @@ function onSettings()      { emit('open-settings') }
 
 .drawer-inner {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   padding-top: var(--status-bar-height, 44px);
 }
 
-.drawer-content {
-  display: flex;
-  flex-direction: row;
-  flex: 1;
-  overflow: hidden;
-}
-
-// ── Role column ──────────────────────────────────────
-
 .role-column {
-  width: 112rpx;
+  width: 120rpx;
   border-right: 2rpx solid $surface-container;
   display: flex;
   flex-direction: column;
@@ -255,6 +234,15 @@ function onSettings()      { emit('open-settings') }
   font-size: 22rpx;
   font-weight: 700;
   color: $on-primary-container;
+}
+
+// ── Right column ───────────────────────────────────
+
+.right-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 // ── Session column ───────────────────────────────────

@@ -1,4 +1,4 @@
-let BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+let BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://100.112.82.63:9199'
 // #ifdef H5
 if (import.meta.env.DEV) BASE_URL = '/api'
 // #endif
@@ -46,7 +46,7 @@ export function request(url, { method = 'GET', params = {}, data, silent = false
       success(res) {
         if (!silent) _hideLoading()
         const body = res.data
-        if (body && body.code === 503) {
+        if (body && (body.code === 503 || body.code === 504)) {
           uni.request({
             url: `${BASE_URL}/auth/ai/sysLogout?operatePort=2`,
             method: 'POST',

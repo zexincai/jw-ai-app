@@ -220,8 +220,8 @@ onShow(() => { if (auth.isLoggedIn) wkIM.reconnect() })
 1. 本地插入 user 消息（status: 'sent'）
 2. 插入 AI 占位消息（content: '', thinking: ' ', status: 'streaming'）
    → streamingId = 占位消息 id
-3. 如果新会话：POST /eng/agent/add → 获取 backendId
-4. POST /eng/agent/addChatRecordData（含系统提示词 + 附件列表）
+3. 如果新会话：POST /app/agent/add → 获取 backendId
+4. POST /app/agent/addChatRecordData（含系统提示词 + 附件列表）
 5. wkIM.sendText("<system>\n角色提示词\noperate-port: 2\n用户令牌\n</system>\n\n用户消息")
 
 --- AI WS 回包（WUKONGIM 发离散 text 消息，非 SSE）---
@@ -318,13 +318,13 @@ function getAsrFormat(mimeType) {
 }
 ```
 
-上传录音文件 → 获取阿里云 ASR token（`GET /eng/voice/aliyunToken`）→ WebSocket ISI 识别 → 文字追加到输入框
+上传录音文件 → 获取阿里云 ASR token（`GET /app/voice/aliyunToken`）→ WebSocket ISI 识别 → 文字追加到输入框
 
 ### 4.3 utils/upload.js
 
 ```js
 async function uploadFile(file, onProgress) {
-  const tokenData = await getUploadToken() // GET /eng/file/temporary/token
+  const tokenData = await getUploadToken() // GET /app/file/temporary/token
   if (tokenData.usageType === 1) {
     return uploadToCOS(file, tokenData, onProgress)
   } else {
@@ -370,8 +370,8 @@ const renderedHtml = computed(() => marked(props.content || ''))
 现有 mock store 改造为真实数据：
 
 - 去除硬编码 mock 消息
-- `sessions` 从 `/eng/agent/getUserAccountChatList` 加载
-- `messages` 从 `/eng/agent/chatRecordDataSearchPage` 分页加载
+- `sessions` 从 `/app/agent/getUserAccountChatList` 加载
+- `messages` 从 `/app/agent/chatRecordDataSearchPage` 分页加载
 - 保留 `isTyping` / `aiReplying` 等 UI 状态
 
 ---

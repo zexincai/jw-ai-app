@@ -9,7 +9,6 @@
           <image src="/static/logo.png" class="logo-img" mode="aspectFit" />
         </view>
         <text class="app-title">HI, JClaw</text>
-        <text class="app-subtitle">Welcome back to Project Architect</text>
       </view>
 
       <!-- Form -->
@@ -35,7 +34,7 @@
               v-model="smsCode"
               class="text-input"
               type="number"
-              :maxlength="6"
+              :maxlength="4"
               placeholder="短信验证码"
               placeholder-class="ph"
             />

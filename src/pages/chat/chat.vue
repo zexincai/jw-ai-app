@@ -50,6 +50,13 @@
       @new-chat="handleNewChat"
       @open-settings="handleOpenSettings"
     />
+
+    <view v-if="switching" class="global-loading">
+      <view class="global-loading-box">
+        <view class="global-loading-spinner" />
+        <text class="global-loading-text">切换角色中…</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -69,12 +76,26 @@ const wkIM = useWukongIM()
 const chat = useChat()
 const drawerVisible = ref(false)
 const scrollTarget = ref('')
+const switching = ref(false)
+
+async function scrollToBottom() {
+  scrollTarget.value = ''
+  await nextTick()
+  scrollTarget.value = 'msg-bottom'
+}
 
 watch(
   () => store.activeMessages.length,
-  () => {
-    scrollTarget.value = ''
-    nextTick(() => { scrollTarget.value = 'msg-bottom' })
+  () => { void scrollToBottom() }
+)
+
+watch(
+  () => store.aiReplying,
+  (val) => {
+    if (!val) {
+      // AI finished — scroll to bottom
+      void scrollToBottom()
+    }
   }
 )
 
@@ -82,6 +103,7 @@ onMounted(async () => {
   await chat.loadSessions()
   if (store.activeSessionId) {
     await chat.loadSession(store.activeSessionId)
+    await scrollToBottom()
   }
   // Connect WUKONGIM if not already connected
   const role = auth.currentRole.value
@@ -97,23 +119,30 @@ function handleSend({ text, attachments }) {
 
 async function handleSelectSession(id) {
   await chat.loadSession(id)
+  await scrollToBottom()
   drawerVisible.value = false
 }
 
 async function handleSelectRole(id) {
-  await auth.switchRole(id)
-  const role = auth.currentRole.value
-  if (role) {
-    wkIM.disconnect()
-    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
-  }
-  await chat.loadSessions()
-  if (store.sessions.length) {
-    await chat.loadSession(store.sessions[0].id)
-  } else {
-    store.newLocalSession()
-  }
   drawerVisible.value = false
+  switching.value = true
+  try {
+    await auth.switchRole(id)
+    const role = auth.currentRole.value
+    if (role) {
+      wkIM.disconnect()
+      wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+    }
+    await chat.loadSessions()
+    if (store.sessions.length) {
+      await chat.loadSession(store.sessions[0].id)
+      await scrollToBottom()
+    } else {
+      store.newLocalSession()
+    }
+  } finally {
+    switching.value = false
+  }
 }
 
 function handleNewChat() {
@@ -241,5 +270,44 @@ function handleOpenSettings() {
 @keyframes bounce {
   0%, 60%, 100% { transform: translateY(0); }
   30%            { transform: translateY(-10rpx); }
+}
+
+.global-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.global-loading-box {
+  background-color: $surface;
+  border-radius: $radius-xl;
+  padding: 48rpx 64rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.18);
+}
+
+.global-loading-spinner {
+  width: 64rpx;
+  height: 64rpx;
+  border: 6rpx solid rgba($primary, 0.2);
+  border-top-color: $primary;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.global-loading-text {
+  font-size: 28rpx;
+  color: $on-surface-variant;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

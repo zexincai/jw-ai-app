@@ -10,7 +10,7 @@ import { http } from '../utils/request.js'
  * }>}
  */
 export function getChatIMLongConnection(params) {
-  return http.get('/eng/chat/getChatIMLongConnection', params)
+  return http.get('/app/chat/getChatIMLongConnection', params)
 }
 
 /**
@@ -25,7 +25,7 @@ export function getChatIMLongConnection(params) {
  * }>>}
  */
 export function getUserAccountChatList() {
-  return http.get('/eng/agent/getUserAccountChatList')
+  return http.get('/app/agent/getUserAccountChatList')
 }
 
 /**
@@ -39,7 +39,7 @@ export function getUserAccountChatList() {
  * }>}
  */
 export function addChat(data) {
-  return http.post('/eng/agent/add', data)
+  return http.post('/app/agent/add', data)
 }
 
 /**
@@ -48,7 +48,7 @@ export function addChat(data) {
  * @returns {Promise<{ code: number, msg: string, data: object }>}
  */
 export function deleteAgent(id) {
-  return http.delete(`/eng/agent/delete/${id}`)
+  return http.delete(`/app/agent/delete/${id}`)
 }
 
 /**
@@ -65,7 +65,7 @@ export function deleteAgent(id) {
  * @returns {Promise<{ code: number, msg: string, data: object }>}
  */
 export function addChatRecordData(data) {
-  return http.post('/eng/agent/addChatRecordData', data, undefined, { silent: true })
+  return http.post('/app/agent/addChatRecordData', data, undefined, { silent: true })
 }
 
 /**
@@ -100,7 +100,7 @@ export function addChatRecordData(data) {
  * }>}
  */
 export function chatRecordDataSearchPage(params) {
-  return http.get('/eng/agent/chatRecordDataSearchPage', params)
+  return http.get('/app/agent/chatRecordDataSearchPage', params)
 }
 
 /**
@@ -108,7 +108,7 @@ export function chatRecordDataSearchPage(params) {
  * @returns {Promise<{ code: number, msg: string, data: string }>} data 为上传凭证
  */
 export function getUploadToken() {
-  return http.get('/eng/file/temporary/token')
+  return http.get('/app/file/temporary/token')
 }
 
 /**
@@ -116,5 +116,5 @@ export function getUploadToken() {
  * @returns {Promise<{ code: number, msg: string, data: string }>} data 为语音识别 Token
  */
 export function getAliyunToken() {
-  return http.get('/eng/voice/aliyunToken')
+  return http.get('/app/voice/aliyunToken')
 }

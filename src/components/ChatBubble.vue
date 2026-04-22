@@ -4,7 +4,8 @@
     <!-- Attachments -->
     <view v-if="message.attachments?.length" class="attach-list attach-list--user">
       <view v-for="att in message.attachments" :key="att.url || att.name" class="attach-item">
-        <image v-if="att.mimeType?.startsWith('image/')" :src="att.previewUrl || att.url" class="attach-img" mode="aspectFill" />
+        <image v-if="att.mimeType?.startsWith('image/')" :src="att.previewUrl || att.url" class="attach-img" mode="aspectFill" @tap="previewImage(message.attachments, att)" />
+        <AudioPlayer v-else-if="att.mimeType?.startsWith('audio/')" :src="att.url" />
         <text v-else class="attach-file">📄 {{ att.name }}</text>
       </view>
     </view>
@@ -45,7 +46,8 @@
       <!-- Attachments -->
       <view v-if="message.attachments?.length" class="attach-list">
         <view v-for="att in message.attachments" :key="att.url || att.name" class="attach-item">
-          <image v-if="att.mimeType?.startsWith('image/')" :src="att.previewUrl || att.url" class="attach-img" mode="aspectFill" />
+          <image v-if="att.mimeType?.startsWith('image/')" :src="att.previewUrl || att.url" class="attach-img" mode="aspectFill" @tap="previewImage(message.attachments, att)" />
+          <AudioPlayer v-else-if="att.mimeType?.startsWith('audio/')" :src="att.url" />
           <text v-else class="attach-file">📄 {{ att.name }}</text>
         </view>
       </view>
@@ -56,12 +58,20 @@
 <script setup>
 import { ref } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
+import AudioPlayer from './AudioPlayer.vue'
 
 defineProps({
   message: { type: Object, required: true },
 })
 
 const thinkingOpen = ref(false)
+
+function previewImage(attachments, current) {
+  const urls = attachments
+    .filter(a => a.mimeType?.startsWith('image/'))
+    .map(a => a.previewUrl || a.url)
+  uni.previewImage({ urls, current: current.previewUrl || current.url })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -114,7 +124,7 @@ const thinkingOpen = ref(false)
 }
 
 .bubble--user .bubble-text {
-  color: $on-primary-container;
+  color: white;
 }
 
 .ai-icon {
