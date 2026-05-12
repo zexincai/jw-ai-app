@@ -37,7 +37,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, getCurrentInstance } from 'vue'
 
 const props = defineProps({
   bgImg: { type: String, default: '' },
@@ -48,8 +48,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['success', 'cancel'])
+const instance = getCurrentInstance()
 
-const HANDLE_SIZE = 44    // px — fallback, dynamically overridden
+const HANDLE_SIZE = 44
 
 const offsetX = ref(0)
 const dragging = ref(false)
@@ -67,15 +68,13 @@ function toSrc(val) {
 const bgSrc = computed(() => toSrc(props.bgImg))
 const pieceSrc = computed(() => toSrc(props.pieceImg))
 
-// Natural dimensions of the background image
 const bgNaturalW = ref(0)
 const bgNaturalH = ref(0)
 
-// Natural dimensions of the piece image (px)
 const pieceNaturalW = ref(0)
 const pieceNaturalH = ref(0)
 
-// Piece rendered size: scale by same ratio as background image
+// Piece rendered size
 const pieceStyle = computed(() => {
   if (!pieceNaturalW.value || !pieceNaturalH.value || !bgNaturalW.value || !containerWidth.value) {
     return { display: 'none' }
@@ -90,6 +89,16 @@ const pieceStyle = computed(() => {
   }
 })
 
+/** 小程序兼容：用组件实例限定选择器作用域 */
+function _in(selector) {
+  // #ifdef MP-WEIXIN || MP-ALIPAY || MP-BAIDU || MP-TOUTIAO
+  return uni.createSelectorQuery().in(instance)
+  // #endif
+  // #ifndef MP-WEIXIN && !MP-ALIPAY && !MP-BAIDU && !MP-TOUTIAO
+  return uni.createSelectorQuery()
+  // #endif
+}
+
 function onPieceLoad(e) {
   const { width, height } = e.detail
   pieceNaturalW.value = width
@@ -101,8 +110,7 @@ function onBgLoad(e) {
   bgNaturalW.value = width
   bgNaturalH.value = height
   nextTick(() => {
-    const query = uni.createSelectorQuery()
-    query.select('.img-wrap').boundingClientRect(rect => {
+    _in().select('.img-wrap').boundingClientRect(rect => {
       if (rect) containerWidth.value = rect.width
     }).exec()
   })
@@ -111,8 +119,7 @@ function onBgLoad(e) {
 function onTouchStart(e) {
   dragging.value = true
   startX = e.touches[0].clientX - offsetX.value
-  // Measure track width and handle size
-  const query = uni.createSelectorQuery()
+  const query = _in()
   query.select('.img-wrap').boundingClientRect(r1 => {
     if (r1) containerWidth.value = r1.width
   })
@@ -127,7 +134,7 @@ function onTouchStart(e) {
 
 function onTouchMove(e) {
   if (!dragging.value) return
-  const maxOffset = (trackWidth || 300) - (handleSize || HANDLE_SIZE)
+  const maxOffset = (trackWidth || containerWidth.value || 300) - (handleSize || HANDLE_SIZE)
   let x = e.touches[0].clientX - startX
   if (x < 0) x = 0
   if (x > maxOffset) x = maxOffset
@@ -139,7 +146,6 @@ function onTouchEnd() {
   dragging.value = false
   if (offsetX.value < 10) return
 
-  // Scale the drag distance to backend's image coordinate space
   const scale = (bgNaturalW.value || props.oriImageWidth) / (containerWidth.value || props.oriImageWidth)
   const scaledDistance = Math.round(offsetX.value * scale)
   emit('success', scaledDistance)
@@ -154,6 +160,7 @@ function onTouchEnd() {
   border-radius: $radius-xl;
   padding: 32rpx;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .captcha-header {

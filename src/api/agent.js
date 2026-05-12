@@ -118,3 +118,55 @@ export function getUploadToken() {
 export function getAliyunToken() {
   return http.get('/app/voice/aliyunToken')
 }
+
+/**
+ * 分页查询待办任务列表
+ * @param {object} params
+ * @param {number} params.pageNum 当前页
+ * @param {number} [params.pageSize] 每页条数
+ * @param {number} [params.messageType] 消息类型（0：待办消息，1：确认消息，2：提醒消息）
+ * @returns {Promise<{
+ *   code: number, msg: string,
+ *   data: { current: number, size: number, total: number,
+ *     records: Array<{
+ *       pkId: number, fkUserId: number, fkUserName: string,
+ *       messageType: number, title: string, businessType: number,
+ *       businessTypeName: string, matterType: number, matterStatus: number,
+ *       quickWords: string, quickLobsterWords: string,
+ *       quickButtonName: string, createTime: string,
+ *       projectBidId: number, projectBidName: string,
+ *       roleName: string, renewalButton: number,
+ *       sealCode: string, sealPersonStatus: number,
+ *       type: number, processingTime: string
+ *     }>
+ *   }
+ * }>}
+ */
+export function searchBacklogPageList(params) {
+  return http.get('/eng/agentUser/searchBacklogPageList', params)
+}
+
+/**
+ * 获取移动端版本信息
+ * @returns {Promise<{ code: number, msg: string, data: object }>}
+ */
+export function getMobileVersionInfo() {
+  return http.get('/app/agent/getMobileVersionInfo')
+}
+
+/**
+ * 获取定时任务列表
+ * @returns {Promise<{ code: number, msg: string, data: Array }>}
+ */
+export function searchTimingTaskByUserId() {
+  return http.get('/app/agent/searchTimingTaskByUserId')
+}
+
+/**
+ * 保存或更新定时任务
+ * @param {object} data
+ * @returns {Promise<{ code: number, msg: string, data: object }>}
+ */
+export function saveOrUpdateTimingTask(data) {
+  return http.post('/app/agent/saveOrUpdateTimingTask', data)
+}

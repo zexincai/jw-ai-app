@@ -375,10 +375,12 @@ onUnmounted(() => {
 
 .captcha-card {
   width: 660rpx;
+  max-width: 90vw;
   border-radius: $radius-xl;
   overflow: hidden;
   background: $surface;
   box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
 }
 
 .wave-wrap {

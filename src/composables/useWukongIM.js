@@ -28,7 +28,7 @@ async function connect(userId, telephone, token) {
   if (modelType === 2) {
     sdk.config.provider.connectAddrCallback = (cb) => cb(wsAddr)
   } else {
-    sdk.config.addr = wsAddr
+    sdk.config.addr = 'ws://100.112.82.63:5200' || wsAddr
   }
   sdk.config.uid = String(userId)
   sdk.config.token = token

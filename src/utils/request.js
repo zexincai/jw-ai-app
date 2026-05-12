@@ -1,3 +1,5 @@
+import { getDeviceId } from './device.js'
+
 let BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://100.112.82.63:9199'
 // #ifdef H5
 if (import.meta.env.DEV) BASE_URL = '/api'
@@ -5,6 +7,15 @@ if (import.meta.env.DEV) BASE_URL = '/api'
 
 // 并发请求计数器，所有请求完成后统一隐藏 loading
 let _loadingCount = 0
+
+// 设备 ID 缓存（懒加载）
+let _deviceIdCache = null
+async function _ensureDeviceId() {
+  if (!_deviceIdCache) {
+    try { _deviceIdCache = await getDeviceId() } catch { _deviceIdCache = '' }
+  }
+  return _deviceIdCache
+}
 
 function _showLoading() {
   _loadingCount++
@@ -29,6 +40,7 @@ function buildQs(params) {
 export function request(url, { method = 'GET', params = {}, data, silent = false } = {}) {
   return new Promise(async (resolve, reject) => {
     const token = uni.getStorageSync('jclaw_token') || ''
+    const deviceId = await _ensureDeviceId()
     const qs = buildQs({ ...params, operatePort: 2 })
     const sep = url.includes('?') ? '&' : '?'
     const fullUrl = `${BASE_URL}${url}${sep}${qs}`
@@ -42,6 +54,7 @@ export function request(url, { method = 'GET', params = {}, data, silent = false
       header: {
         'Content-Type': 'application/json',
         Authorization: token,
+        clientid: deviceId,
       },
       success(res) {
         if (!silent) _hideLoading()

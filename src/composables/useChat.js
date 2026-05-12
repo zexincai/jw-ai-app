@@ -1,6 +1,7 @@
 import { useChatStore } from '../stores/chat.js'
 import { useWukongIM } from './useWukongIM.js'
 import { useAuth } from './useAuth.js'
+import { useBacklog } from './useBacklog.js'
 import {
   addChat,
   addChatRecordData,
@@ -13,6 +14,12 @@ let _initialized = false
 let _streamingId = null
 let _doneTimer = null
 let _currentChatId = null
+
+// ── Private item queue (messageType===1 自动发送) ──
+const privateItemQueue = []
+let processingPrivateQueue = false
+const replySeed = { count: 0 }
+const pendingReplies = new Map() // requestId → { pkId, onComplete }
 
 function uid() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -38,6 +45,71 @@ function stripActionTags(text) {
     .replace(/<deskAction>[\s\S]*?<\/deskAction>/gi, '')
     .replace(/<system>[\s\S]*?<\/system>/gi, '')
     .trim()
+}
+
+/** Parse platform action tags and return extracted actions */
+function extractActions(text) {
+  const actions = []
+  // Extract <appAction> tags
+  const appMatch = text.match(/<appAction>([\s\S]*?)<\/appAction>/gi)
+  if (appMatch) {
+    for (const tag of appMatch) {
+      try {
+        const inner = tag.replace(/<\/?appAction>/gi, '').trim()
+        const parsed = JSON.parse(inner)
+        if (parsed) actions.push({ type: 'app', ...parsed })
+      } catch { /* ignore */ }
+    }
+  }
+  // Extract <deskAction> tags
+  const deskMatch = text.match(/<deskAction>([\s\S]*?)<\/deskAction>/gi)
+  if (deskMatch) {
+    for (const tag of deskMatch) {
+      try {
+        const inner = tag.replace(/<\/?deskAction>/gi, '').trim()
+        const parsed = JSON.parse(inner)
+        if (parsed) actions.push({ type: 'desk', ...parsed })
+      } catch { /* ignore */ }
+    }
+  }
+  return actions
+}
+
+/** Extract open_modal action from content */
+function extractOpenModal(text) {
+  const match = text.match(/"open_modal"\s*:\s*"(\w+)"/)
+  if (match) return match[1]
+  const match2 = text.match(/open_modal:\s*(\w+)/)
+  if (match2) return match2[1]
+  return null
+}
+
+/** Extract material table data from JSON code blocks */
+function extractMaterialTable(text) {
+  const match = text.match(/```json\s*([\s\S]*?)```/)
+  if (!match) return null
+  try {
+    const data = JSON.parse(match[1])
+    // Check if it looks like a material table
+    if (data.materials && Array.isArray(data.materials)) {
+      return data.materials.map(m => ({
+        material: m.material || m.name || '',
+        subtext: m.subtext || m.category || '',
+        spec: m.spec || m.specifications || '',
+        quantity: String(m.quantity || m.qty || ''),
+        priority: m.priority || 'Normal',
+      }))
+    }
+    // Check for table data format
+    if (data.rows && Array.isArray(data.rows)) return data.rows.map(r => ({
+      material: r.material || r[0] || '',
+      subtext: r.subtext || r.category || '',
+      spec: r.spec || r.specifications || r[1] || '',
+      quantity: String(r.quantity || r.qty || r[2] || ''),
+      priority: r.priority || r[3] || 'Normal',
+    }))
+  } catch { /* ignore */ }
+  return null
 }
 
 
@@ -70,6 +142,20 @@ export function useChat() {
   function _handleIncoming(store, rawText) {
     const thinking = extractThinking(rawText)
     const cleaned = stripActionTags(stripThinkingTags(rawText))
+    const actions = extractActions(rawText)
+    const openModal = extractOpenModal(rawText)
+    const materialTable = extractMaterialTable(rawText)
+
+    // Check for private item reply completion
+    if (_streamingId) {
+      // Find all pending replies that don't have a streamingId yet
+      for (const [requestId, pending] of pendingReplies) {
+        if (!pending.streamingId && pending.pkId) {
+          pending.streamingId = _streamingId
+          break
+        }
+      }
+    }
 
     if (!_streamingId) return
 
@@ -81,6 +167,9 @@ export function useChat() {
       content: cleaned,
       thinking: thinking || undefined,
       status: 'streaming',
+      actions: actions.length ? actions : undefined,
+      openModal: openModal || undefined,
+      materialTable: materialTable || undefined,
     }
     store.upsertMessage(updated)
 
@@ -96,6 +185,17 @@ export function useChat() {
             chatContent: msg.content,
             chatObject: '1',
           }).catch(() => {})
+        }
+        // Handle private item reply: update backlog and resolve pending
+        for (const [requestId, pending] of pendingReplies) {
+          if (pending.streamingId === _streamingId && pending.pkId) {
+            const backlog = useBacklog()
+            backlog.updatePrivateItemReply(pending.pkId, cleaned)
+            backlog.revealPrivateItem(pending.pkId)
+            if (pending.onComplete) pending.onComplete()
+            pendingReplies.delete(requestId)
+            break
+          }
         }
       }
       _streamingId = null
@@ -273,5 +373,134 @@ export function useChat() {
     }
   }
 
-  return { send, loadSessions, loadSession, deleteSession }
+  // ── Backlog: messageType===1 自动发送 ──
+
+  /** 将缓存中属于当前角色的 messageType===1 待办项逐条发送到 IM */
+  async function autoSendPrivateItems() {
+    const { getUnsentPrivateItems, markPrivateItemsSent, typeItemsMap } = useBacklog()
+    const currentUserId = String(auth.currentRole.value?.userId ?? '')
+    const items = getUnsentPrivateItems([currentUserId])
+    if (!items.length) return
+
+    markPrivateItemsSent(items.filter(i => i.pkId != null))
+
+    for (const item of items) privateItemQueue.push(item)
+
+    if (!processingPrivateQueue) _processPrivateQueue()
+  }
+
+  async function _processPrivateQueue() {
+    if (processingPrivateQueue) return
+    processingPrivateQueue = true
+    while (privateItemQueue.length > 0) {
+      const item = privateItemQueue.shift()
+      await _sendPrivateItemToIM(item)
+    }
+    processingPrivateQueue = false
+  }
+
+  function _sendPrivateItemToIM(item) {
+    return new Promise((resolve) => {
+      const rawText = item.quickWords || ''
+      if (!rawText) { resolve(); return }
+
+      const role = auth.currentRole.value
+      const sysLines = [
+        role?.userRolePrompt || '',
+        ' operate-port: 2',
+        auth.token.value ? `用户令牌：${auth.token.value}` : '',
+      ].filter(Boolean).join('\n')
+      const sysBlock = sysLines ? `<system>\n${sysLines}\n</system>\n\n` : ''
+
+      const requestId = ++replySeed.count
+      pendingReplies.set(requestId, {
+        pkId: item.pkId,
+        streamingId: null,
+        onComplete: resolve,
+      })
+
+      // Create a placeholder message for this private item reply
+      if (!store.activeSessionId) store.newLocalSession()
+      const sessionId = store.activeSessionId
+      const placeholderId = uid()
+      _streamingId = placeholderId
+      store.aiReplying = true
+      store.pushMessage({
+        id: placeholderId,
+        sessionId,
+        role: 'assistant',
+        content: '',
+        thinking: ' ',
+        status: 'streaming',
+        createdAt: new Date().toISOString(),
+      })
+
+      wkIM.sendText(sysBlock + rawText).catch(() => {
+        pendingReplies.delete(requestId)
+        store.removeMessage(placeholderId)
+        _streamingId = null
+        store.aiReplying = false
+        resolve()
+      })
+    })
+  }
+
+  // ── Backlog: 发送单条待办 ──
+
+  /** 发送单条待办事项作为聊天消息 */
+  async function sendBacklogItem(item) {
+    if (!store.activeSessionId) store.newLocalSession()
+    const session = store.sessions.find(s => s.id === store.activeSessionId)
+
+    // Ensure backend session
+    if (session && !session.backendId) {
+      try {
+        const res = await addChat({ chatTitle: (item.title || '待办消息').slice(0, 50) })
+        const pkId = (res.data || res)
+        if (pkId) session.backendId = typeof pkId === 'object' ? pkId.pkId : pkId
+      } catch { /* ignore */ }
+    }
+
+    const chatId = session?.backendId ?? null
+    const userText = item.quickWords || ''
+    const aiText = item.quickLobsterWords || ''
+
+    // Display user side
+    if (userText) {
+      const userMsgId = uid()
+      store.pushMessage({
+        id: userMsgId,
+        sessionId: store.activeSessionId,
+        role: 'user',
+        content: userText,
+        status: 'done',
+        createdAt: new Date().toISOString(),
+      })
+    }
+
+    // Display AI side
+    if (aiText) {
+      const aiMsgId = uid()
+      store.pushMessage({
+        id: aiMsgId,
+        sessionId: store.activeSessionId,
+        role: 'assistant',
+        content: aiText,
+        status: 'done',
+        createdAt: new Date().toISOString(),
+      })
+    }
+
+    // Save to backend
+    if (chatId) {
+      if (userText) {
+        addChatRecordData({ fkChatId: chatId, chatContent: userText, chatObject: '0' }).catch(() => {})
+      }
+      if (aiText) {
+        addChatRecordData({ fkChatId: chatId, chatContent: aiText, chatObject: '1' }).catch(() => {})
+      }
+    }
+  }
+
+  return { send, loadSessions, loadSession, deleteSession, autoSendPrivateItems, sendBacklogItem }
 }

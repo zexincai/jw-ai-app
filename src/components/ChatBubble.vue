@@ -43,6 +43,23 @@
         <MarkdownContent :content="message.content" />
       </view>
 
+      <!-- Action buttons -->
+      <ActionCard
+        v-if="message.openModal"
+        :modal="message.openModal"
+      />
+      <ActionTagButton
+        v-for="(action, idx) in message.actions"
+        :key="idx"
+        :action="action"
+      />
+
+      <!-- Material Table -->
+      <MaterialTable
+        v-if="message.materialTable"
+        :rows="message.materialTable"
+      />
+
       <!-- Attachments -->
       <view v-if="message.attachments?.length" class="attach-list">
         <view v-for="att in message.attachments" :key="att.url || att.name" class="attach-item">
@@ -59,6 +76,9 @@
 import { ref } from 'vue'
 import MarkdownContent from './MarkdownContent.vue'
 import AudioPlayer from './AudioPlayer.vue'
+import ActionCard from './ActionCard.vue'
+import ActionTagButton from './ActionTagButton.vue'
+import MaterialTable from './MaterialTable.vue'
 
 defineProps({
   message: { type: Object, required: true },

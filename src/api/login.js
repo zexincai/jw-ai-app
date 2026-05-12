@@ -77,3 +77,40 @@ export function mobileLoginApi({ phoneNumber, code, uuid }) {
 export function switchLoginApi({ phoneNumber, pkId }) {
   return http.post('/auth/switchLogin', { phoneNumber, pkId, sourceType: 3 })
 }
+
+// ── 扫码登录 ──
+
+/**
+ * 新增二维码
+ * @returns {Promise<{ data: string }>} data 为二维码唯一标识
+ */
+export function addQRCode() {
+  return http.get('/eng/public/addQRCode')
+}
+
+/**
+ * 查询二维码扫描状态
+ * @param {string} unique 二维码唯一标识
+ * @returns {Promise<{ data: number }>} 扫描状态码
+ */
+export function queryQRCode(unique) {
+  return http.get('/eng/public/queryQRCode', { unique })
+}
+
+/**
+ * 扫码登录
+ * @param {string} scanCode 扫码登录唯一标识
+ * @returns {Promise<*>}
+ */
+export function scanCodeLogin(scanCode) {
+  return http.post(`/auth/scanCode/login?${scanCode}`)
+}
+
+/**
+ * 扫码前检查条件
+ * @param {string} [userId]
+ * @returns {Promise<*>}
+ */
+export function scanCodePreconditions(userId) {
+  return http.get('/auth/scanCode/preconditions', userId ? { userId } : undefined)
+}

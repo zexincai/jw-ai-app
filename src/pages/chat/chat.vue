@@ -9,7 +9,14 @@
       <text class="topbar-title">{{ auth.currentRole?.name || 'JClaw' }}</text>
     </view>
 
+    <!-- 无消息时显示欢迎页 -->
+    <WelcomeState
+      v-if="!store.activeMessages.length && !store.aiReplying"
+      @send="handleSend"
+    />
+
     <scroll-view
+      v-else
       scroll-y
       class="message-list"
       :scroll-into-view="scrollTarget"
@@ -36,7 +43,11 @@
       </view>
     </scroll-view>
 
-    <InputBar @send="handleSend" />
+    <InputBar v-if="store.activeMessages.length || store.aiReplying" @send="handleSend" />
+
+    <UsageBar v-if="store.activeMessages.length || store.aiReplying" />
+
+    <FloatingBacklogButton />
 
     <DrawerNav
       :visible="drawerVisible"
@@ -57,6 +68,13 @@
         <text class="global-loading-text">切换角色中…</text>
       </view>
     </view>
+
+    <ConnectionStatusModal
+      :visible="connectionModalVisible"
+      :status="store.wsStatus"
+      @close="connectionModalVisible = false"
+      @reconnect="handleReconnect"
+    />
   </view>
 </template>
 
@@ -69,14 +87,21 @@ import { useChat } from '@/composables/useChat.js'
 import ChatBubble from '@/components/ChatBubble.vue'
 import InputBar from '@/components/InputBar.vue'
 import DrawerNav from '@/components/DrawerNav.vue'
+import FloatingBacklogButton from '@/components/FloatingBacklogButton.vue'
+import WelcomeState from '@/components/WelcomeState.vue'
+import UsageBar from '@/components/UsageBar.vue'
+import ConnectionStatusModal from '@/components/ConnectionStatusModal.vue'
+import { useBacklog } from '@/composables/useBacklog.js'
 
 const store = useChatStore()
 const auth = useAuth()
 const wkIM = useWukongIM()
 const chat = useChat()
+const backlog = useBacklog()
 const drawerVisible = ref(false)
 const scrollTarget = ref('')
 const switching = ref(false)
+const connectionModalVisible = ref(false)
 
 async function scrollToBottom() {
   scrollTarget.value = ''
@@ -110,6 +135,8 @@ onMounted(async () => {
   if (role && wkIM.status.value !== 'connected') {
     wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
   }
+  // Fetch backlog counts
+  backlog.fetchTypeTotals().catch(() => {})
 })
 
 function handleSend({ text, attachments }) {
@@ -153,6 +180,25 @@ function handleNewChat() {
 function handleOpenSettings() {
   drawerVisible.value = false
   uni.navigateTo({ url: '/pages/settings/settings' })
+}
+
+watch(
+  () => store.wsStatus,
+  (val) => {
+    if (val === 'disconnected' || val === 'failed') {
+      connectionModalVisible.value = true
+    } else if (val === 'connected') {
+      connectionModalVisible.value = false
+    }
+  }
+)
+
+function handleReconnect() {
+  connectionModalVisible.value = false
+  const role = auth.currentRole.value
+  if (role) {
+    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+  }
 }
 </script>
 

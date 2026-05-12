@@ -1,7 +1,14 @@
+<template>
+  <ToastList />
+  <GlobalLoading />
+</template>
+
 <script setup>
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { useAuth } from '@/composables/useAuth.js'
 import { useWukongIM } from '@/composables/useWukongIM.js'
+import ToastList from '@/components/ToastList.vue'
+import GlobalLoading from '@/components/GlobalLoading.vue'
 
 onLaunch(() => {
   // #ifdef H5
@@ -42,7 +49,5 @@ page {
   font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
   box-sizing: border-box;
 }
-* {
-  box-sizing: border-box;
-}
+/* * 选择器不支持小程序 WXSS，已移除 */
 </style>
