@@ -1,26 +1,41 @@
 import { ref, computed } from 'vue'
 import { mobileLoginApi, switchLoginApi } from '../api/login.js'
+import { useQuickTypes } from './useQuickTypes.js'
+import yyPng from '/static/headPortrait/yy.png'
+import dlPng from '/static/headPortrait/dl.png'
+import jsPng from '/static/headPortrait/js.png'
+import jlPng from '/static/headPortrait/jl.png'
+import sgPng from '/static/headPortrait/sg.png'
+import xmPng from '/static/headPortrait/xm.png'
+import gyPng from '/static/headPortrait/gy.png'
+import fbPng from '/static/headPortrait/fb.png'
+import lwPng from '/static/headPortrait/lw.png'
+import sjPng from '/static/headPortrait/sj.png'
+import sgjtPng from '/static/headPortrait/sgjt.png'
+import zfjgPng from '/static/headPortrait/zfjg.png'
+import jsjtPng from '/static/headPortrait/jsjt.png'
+import rebarPng from '/static/headPortrait/rebar.png'
 
 const token = ref('')
 const roles = ref([])
 const currentRoleId = ref('')
 
 const ORG_TYPE_AVATAR = {
-  0: '/static/headPortrait/yy.png',
-  1: '/static/headPortrait/dl.png',
-  2: '/static/headPortrait/js.png',
-  3: '/static/headPortrait/jl.png',
-  4: '/static/headPortrait/sg.png',
-  5: '/static/headPortrait/xm.png',
-  6: '/static/headPortrait/gy.png',
-  7: '/static/headPortrait/fb.png',
-  8: '/static/headPortrait/lw.png',
-  9: '/static/headPortrait/sj.png',
-  10: '/static/headPortrait/sgjt.png',
-  11: '/static/headPortrait/zfjg.png',
-  12: '/static/headPortrait/jsjt.png',
-  13: '/static/headPortrait/rebar.png',
-  14: '/static/headPortrait/xm.png',
+  0: yyPng,
+  1: dlPng,
+  2: jsPng,
+  3: jlPng,
+  4: sgPng,
+  5: xmPng,
+  6: gyPng,
+  7: fbPng,
+  8: lwPng,
+  9: sjPng,
+  10: sgjtPng,
+  11: zfjgPng,
+  12: jsjtPng,
+  13: rebarPng,
+  14: xmPng,
 }
 
 function _mapRole(r) {
@@ -83,6 +98,8 @@ async function switchRole(roleId) {
   currentRoleId.value = String(roleId)
   const auth = uni.getStorageSync('jclaw_auth') || {}
   uni.setStorageSync('jclaw_auth', { ...auth, currentRoleId: currentRoleId.value })
+  useQuickTypes().reset()
+  useQuickTypes().fetchTabs()
 }
 
 function logout() {

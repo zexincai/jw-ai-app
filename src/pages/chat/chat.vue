@@ -3,10 +3,13 @@
     <view class="status-bar-spacer" />
 
     <view class="topbar">
-      <view class="topbar-btn" @tap="goLogin">
-        <image src="/static/icon-back.svg" class="topbar-icon" mode="aspectFit" />
+      <view class="topbar-left">
+        <view class="topbar-btn" @tap="goLogin">
+          <image src="/static/icon-back.svg" class="topbar-icon" mode="aspectFit" />
+        </view>
+        <image src="/static/logo.png" class="topbar-logo" mode="aspectFit" />
+        <text class="topbar-title">JClaw</text>
       </view>
-      <text class="topbar-title">JClaw</text>
       <view class="topbar-todo" @tap="todoPanelType = 0">
         <image src="/static/icon-todo.svg" class="topbar-todo-icon" mode="aspectFit" />
         <text class="topbar-todo-label">待办</text>
@@ -41,9 +44,6 @@
         />
 
         <view v-if="store.aiReplying && store.activeMessages.at(-1)?.status !== 'streaming'" class="typing-row">
-          <view class="typing-icon">
-            <image src="/static/logo.png" class="typing-icon-img" mode="aspectFit" />
-          </view>
           <view class="typing-bubble">
             <view class="dot" />
             <view class="dot dot--2" />
@@ -155,6 +155,7 @@ onMounted(async () => {
   await chat.loadSessions()
   if (store.activeSessionId) {
     await chat.loadSession(store.activeSessionId)
+    await nextTick()
     await scrollToBottom()
   }
   // Connect WUKONGIM if not already connected
@@ -173,6 +174,7 @@ function handleSend({ text, attachments }) {
 
 async function handleSelectSession(id) {
   await chat.loadSession(id)
+  await nextTick()
   await scrollToBottom()
   drawerVisible.value = false
 }
@@ -190,6 +192,7 @@ async function handleSelectRole(id) {
     await chat.loadSessions()
     if (store.sessions.length) {
       await chat.loadSession(store.sessions[0].id)
+      await nextTick()
       await scrollToBottom()
     } else {
       store.newLocalSession()
@@ -276,12 +279,21 @@ function handleReconnect() {
   height: 44rpx;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.topbar-logo {
+  width: 40rpx;
+  height: 40rpx;
+}
+
 .topbar-title {
   font-size: 32rpx;
   font-weight: 600;
   color: $primary;
-  flex: 1;
-  text-align: center;
 }
 
 .topbar-todo {

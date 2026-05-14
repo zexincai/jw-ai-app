@@ -217,7 +217,19 @@ async function _transcribe(audio) {
   // #endif
   // #ifndef H5
   arrayBuffer = await new Promise((ok, fail) => {
-    uni.getFileSystemManager().readFile({ filePath: audio.path, success: (r) => ok(r.data), fail })
+    const fs = uni.getFileSystemManager?.()
+    if (fs) {
+      fs.readFile({ filePath: audio.path, success: (r) => ok(r.data), fail })
+    } else {
+      // 回退：5+App 使用 plus.io
+      plus.io.resolveLocalFileSystemURL(audio.path, (entry) => {
+        entry.file((file) => {
+          const reader = new plus.io.FileReader()
+          reader.onloadend = (e) => ok(e.target.result)
+          reader.readAsArrayBuffer(file)
+        }, fail)
+      }, fail)
+    }
   })
   if (arrayBuffer.byteLength < 1024) throw new Error('录音时间太短，请重试')
   // #endif
@@ -310,10 +322,14 @@ async function _processFile(file, name) {
   try {
     uni.showLoading({ title: '上传中...' })
 
-    // H5 File 对象直接获取 mimeType
+    // #ifdef H5
     const mimeType = file instanceof File && file.type ? file.type : _inferMimeType(name)
-
     const url = await uploadAttachment(file instanceof File ? file : { path: file.path || file })
+    // #endif
+    // #ifndef H5
+    const mimeType = _inferMimeType(name)
+    const url = await uploadAttachment({ path: file.path || file })
+    // #endif
 
     // 图片文件额外生成预览 URL
     let previewUrl

@@ -2,7 +2,7 @@
   <!-- 芯片横滚行 -->
   <view class="chips-row">
     <view
-      v-for="tab in TABS"
+      v-for="tab in tabs"
       :key="tab.type"
       class="chip"
       :class="openType === tab.type ? 'chip--active' : ''"
@@ -94,17 +94,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getChatQuickList, addChatQuick, deleteChatQuick } from '@/api/chatQuick.js'
+import { useQuickTypes } from '@/composables/useQuickTypes.js'
 
 const emit = defineEmits(['action'])
-
-const TABS = [
-  { type: '0', label: '待办事项' },
-  { type: '1', label: '录入资料' },
-  { type: '2', label: '查询记录' },
-  { type: '3', label: '汇总数据' },
-]
+const { tabs, fetchTabs } = useQuickTypes()
 
 const openType   = ref(null)
 const items      = ref([])
@@ -113,8 +108,12 @@ const showDialog = ref(false)
 const saving     = ref(false)
 const form       = ref({ quickTitle: '', quickWords: '' })
 
-const currentTabLabel = computed(() => TABS.find(t => t.type === openType.value)?.label || '')
+const currentTabLabel = computed(() => tabs.value.find(t => t.type === openType.value)?.label || '')
 const canSave = computed(() => form.value.quickTitle.trim() && form.value.quickWords.trim() && !saving.value)
+
+onMounted(() => {
+  fetchTabs()
+})
 
 async function loadItems() {
   if (!openType.value) return

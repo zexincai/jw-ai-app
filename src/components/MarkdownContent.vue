@@ -14,10 +14,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { marked } from 'marked'
+import { parse as marked } from 'marked'
 import MarkdownTable from './MarkdownTable.vue'
 
-marked.setOptions({ breaks: true })
+marked.setOptions({ breaks: true, gfm: true })
 
 const props = defineProps({
   content: { type: String, default: '' },

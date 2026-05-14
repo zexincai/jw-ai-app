@@ -1,6 +1,6 @@
 import { getDeviceId } from './device.js'
 
-let BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://100.112.82.63:9199'
+let BASE_URL = import.meta.env.VITE_API_BASE_URL
 // #ifdef H5
 if (import.meta.env.DEV) BASE_URL = '/api'
 // #endif
@@ -40,13 +40,13 @@ function buildQs(params) {
 export function request(url, { method = 'GET', params = {}, data, silent = false } = {}) {
   return new Promise(async (resolve, reject) => {
     const token = uni.getStorageSync('jclaw_token') || ''
-    const deviceId = await _ensureDeviceId()
+    // const deviceId = await _ensureDeviceId()
     const qs = buildQs({ ...params, operatePort: 4 })
     const sep = url.includes('?') ? '&' : '?'
     const fullUrl = `${BASE_URL}${url}${sep}${qs}`
 
     if (!silent) _showLoading()
-
+    console.log('Request URL:', fullUrl)
     uni.request({
       url: fullUrl,
       method,
@@ -54,7 +54,7 @@ export function request(url, { method = 'GET', params = {}, data, silent = false
       header: {
         'Content-Type': 'application/json',
         Authorization: token,
-        clientid: deviceId,
+        // clientid: deviceId,
       },
       success(res) {
         if (!silent) _hideLoading()

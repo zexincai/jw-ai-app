@@ -135,6 +135,7 @@ export function useChat() {
       else if (typeof content === 'string') rawText = content
       if (!rawText) return
 
+      console.log('[IM Receive text]', rawText)
       _handleIncoming(store, rawText)
     })
   }
@@ -299,6 +300,7 @@ export function useChat() {
     }
 
     try {
+      console.log('[IM Send chat]', sysBlock + textToSend)
       wkIM.sendText(sysBlock + textToSend)
     } catch {
       store.upsertMessage({ ...userMsg, status: 'error' })

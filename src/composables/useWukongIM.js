@@ -14,6 +14,7 @@ function _statusListener(s) {
 }
 
 function _messageListener(msg) {
+  console.log('[IM Receive]', JSON.stringify(msg))
   _messageHandlers.forEach(h => h(msg))
 }
 
@@ -28,7 +29,7 @@ async function connect(userId, telephone, token) {
   if (modelType === 2) {
     sdk.config.provider.connectAddrCallback = (cb) => cb(wsAddr)
   } else {
-    sdk.config.addr = 'ws://100.112.82.63:5200' || wsAddr
+    sdk.config.addr = wsAddr
   }
   sdk.config.uid = String(userId)
   sdk.config.token = token
@@ -66,6 +67,7 @@ function reconnect() {
 }
 
 function sendText(text) {
+  console.log('[IM Send]', text)
   const channel = new Channel(_telephone, ChannelTypePerson)
   const msg = new MessageText(text)
   WKSDK.shared().chatManager.send(msg, channel)

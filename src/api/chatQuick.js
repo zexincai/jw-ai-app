@@ -23,3 +23,11 @@ export function addChatQuick(params) {
 export function deleteChatQuick(pkId) {
   return http.delete('/app/chatQuick/delete', { pkId })
 }
+
+/**
+ * 获取快捷语类型列表
+ * @returns {Promise<Array<{ quickTypeTitle: string, quickTypeValue: string }>>}
+ */
+export function getQuickTypeList() {
+  return http.get('/app/chatQuick/getQuickTypeList')
+}

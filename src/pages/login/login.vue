@@ -52,7 +52,7 @@
 
         <!-- Login button -->
         <view class="login-btn" :class="loading ? 'login-btn--disabled' : ''" @tap="handleLogin">
-          <text class="login-btn-text">{{ loading ? '登录中...' : '登 录' }}</text>
+          <text class="login-btn-text">{{ loading ? '操作中...' : '登 录' }}</text>
         </view>
       </view>
     </view>

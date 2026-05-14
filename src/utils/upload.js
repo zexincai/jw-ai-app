@@ -48,9 +48,11 @@ function _upload(filePath, onProgress) {
   })
 }
 
-/** 获取文件大小（native 用 getFileInfo，H5 File 对象直接取 .size） */
+/** 获取文件大小（native 用 getFileInfo，H5 File/Blob 对象直接取 .size） */
 function _getSize(file) {
+  // #ifdef H5
   if (file instanceof Blob) return Promise.resolve(file.size)
+  // #endif
   if (file.size != null)   return Promise.resolve(file.size)
   return new Promise(resolve => {
     uni.getFileInfo({
