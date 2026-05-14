@@ -41,7 +41,7 @@ export function request(url, { method = 'GET', params = {}, data, silent = false
   return new Promise(async (resolve, reject) => {
     const token = uni.getStorageSync('jclaw_token') || ''
     const deviceId = await _ensureDeviceId()
-    const qs = buildQs({ ...params, operatePort: 2 })
+    const qs = buildQs({ ...params, operatePort: 4 })
     const sep = url.includes('?') ? '&' : '?'
     const fullUrl = `${BASE_URL}${url}${sep}${qs}`
 
@@ -61,7 +61,7 @@ export function request(url, { method = 'GET', params = {}, data, silent = false
         const body = res.data
         if (body && (body.code === 503 || body.code === 504)) {
           uni.request({
-            url: `${BASE_URL}/auth/ai/sysLogout?operatePort=2`,
+            url: `${BASE_URL}/auth/ai/sysLogout?operatePort=4`,
             method: 'POST',
             header: { Authorization: token, 'Content-Type': 'application/json' },
           })

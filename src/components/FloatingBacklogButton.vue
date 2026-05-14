@@ -1,5 +1,11 @@
 <template>
-  <view class="fbb-container">
+  <view
+    class="fbb-container"
+    :style="{ left: pos.x + 'px', top: pos.y + 'px' }"
+    @touchstart.prevent="onDragStart"
+    @touchmove.prevent="onDragMove"
+    @touchend.prevent="onDragEnd"
+  >
     <!-- 扇形气泡 — 向左展开 -->
     <view v-if="expanded" class="fbb-fan">
       <!-- 待办事项 -->
@@ -29,7 +35,7 @@
     </view>
 
     <!-- 主按钮 -->
-    <view class="fbb-main-wrap" @tap.stop="expanded = !expanded">
+    <view class="fbb-main-wrap">
       <view
         class="fbb-main"
         :class="{ 'fbb-main--expanded': expanded }"
@@ -42,7 +48,7 @@
     </view>
 
     <!-- 遮罩（展开时） -->
-    <view v-if="expanded" class="fbb-overlay" @tap.stop="expanded = false" />
+    <view v-if="expanded" class="fbb-overlay" @tap.stop="onOverlayTap" />
   </view>
 
   <!-- 列表面板 -->
@@ -54,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useBacklog } from '@/composables/useBacklog.js'
 import { useAuth } from '@/composables/useAuth.js'
 import BacklogPanel from './BacklogPanel.vue'
@@ -64,6 +70,69 @@ const { roles } = useAuth()
 
 const expanded = ref(false)
 const selectedType = ref(null)
+const pos = ref({ x: 0, y: 0 })
+
+const BTN_SIZE = 56
+const EDGE_MARGIN = 8
+const TAP_THRESHOLD = 6
+let screenW = 0
+let screenH = 0
+let dragStartX = 0
+let dragStartY = 0
+let dragOffsetX = 0
+let dragOffsetY = 0
+let moved = false
+
+onMounted(() => {
+  const sys = uni.getSystemInfoSync()
+  screenW = sys.windowWidth
+  screenH = sys.windowHeight
+  pos.value = {
+    x: screenW - BTN_SIZE - 16,
+    y: screenH - BTN_SIZE - 120,
+  }
+})
+
+function onDragStart(e) {
+  const touch = e.touches[0]
+  dragStartX = touch.clientX
+  dragStartY = touch.clientY
+  dragOffsetX = touch.clientX - pos.value.x
+  dragOffsetY = touch.clientY - pos.value.y
+  moved = false
+}
+
+function onDragMove(e) {
+  if (expanded.value) return
+  const touch = e.touches[0]
+  if (!moved) {
+    const dx = touch.clientX - dragStartX
+    const dy = touch.clientY - dragStartY
+    if (Math.abs(dx) < TAP_THRESHOLD && Math.abs(dy) < TAP_THRESHOLD) return
+    moved = true
+  }
+  let x = touch.clientX - dragOffsetX
+  let y = touch.clientY - dragOffsetY
+  x = Math.max(EDGE_MARGIN, Math.min(screenW - BTN_SIZE - EDGE_MARGIN, x))
+  y = Math.max(EDGE_MARGIN, Math.min(screenH - BTN_SIZE - EDGE_MARGIN, y))
+  pos.value = { x, y }
+}
+
+function onDragEnd(e) {
+  if (moved) return
+  const touch = e.changedTouches[0]
+  const inMain = touch.clientX >= pos.value.x
+    && touch.clientX <= pos.value.x + BTN_SIZE
+    && touch.clientY >= pos.value.y
+    && touch.clientY <= pos.value.y + BTN_SIZE
+  if (inMain) {
+    expanded.value = !expanded.value
+  }
+}
+
+function onOverlayTap() {
+  expanded.value = false
+}
 
 const roleIdSet = computed(() => new Set(roles.value.map(role => String(role.userId))))
 const roleTypeTotals = computed(() => {
@@ -91,8 +160,6 @@ function openPanel(type) {
 
 .fbb-container {
   position: fixed;
-  right: 16px;
-  bottom: 120px;
   z-index: 600;
   width: 56px;
   height: 56px;
@@ -169,6 +236,7 @@ function openPanel(type) {
 
 .fbb-main-wrap {
   position: relative;
+  z-index: 601;
   width: 56px;
   height: 56px;
 }

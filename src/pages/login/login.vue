@@ -15,7 +15,7 @@
       <view class="form">
         <!-- Phone input -->
         <view class="input-row">
-          <text class="input-icon">📱</text>
+          <SvgIcon name="phone" :size="36" />
           <input
             v-model="phone"
             class="text-input"
@@ -29,7 +29,7 @@
         <!-- Code input row -->
         <view class="code-row">
           <view class="input-row input-row--flex">
-            <text class="input-icon">🔐</text>
+            <SvgIcon name="lock" :size="36" />
             <input
               v-model="smsCode"
               class="text-input"
@@ -81,6 +81,7 @@
 <script setup>
 import { ref, onUnmounted } from 'vue'
 import SliderCaptcha from '@/components/SliderCaptcha.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 import { useAuth } from '@/composables/useAuth.js'
 import { getCaptchaApi, sendSmsCodeApi } from '@/api/login.js'
 
@@ -294,11 +295,6 @@ onUnmounted(() => {
     box-shadow: none;
     background: transparent;
   }
-}
-
-.input-icon {
-  font-size: 36rpx;
-  flex-shrink: 0;
 }
 
 .text-input {

@@ -208,7 +208,7 @@ function onTouchEnd() {
 .track {
   position: relative;
   height: 72rpx;
-  background: $surface-container-low;
+  background: $surface-container-high;
   border-radius: 36rpx;
   display: flex;
   align-items: center;
