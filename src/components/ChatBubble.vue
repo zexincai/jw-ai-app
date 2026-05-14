@@ -118,7 +118,7 @@ function previewImage(attachments, current) {
   padding: 24rpx 28rpx;
 
   &--user {
-    background-color: $primary-container;
+    background-color: #005fae;
     border-radius: $radius-xl;
     max-width: 80%;
   }

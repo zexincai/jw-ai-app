@@ -8,9 +8,8 @@
       <text class="welcome-title">Hi，我是 JClaw</text>
     </view>
 
-    <!-- 快捷操作 + 输入框卡片 -->
+    <!-- 输入框卡片 -->
     <view class="welcome-card">
-      <QuickActions @action="handleQuickAction" />
       <view class="welcome-input-wrap">
         <InputBar @send="handleSend" />
       </view>
@@ -23,20 +22,11 @@
 
 <script setup>
 import InputBar from './InputBar.vue'
-import QuickActions from './QuickActions.vue'
-import { useChat } from '@/composables/useChat.js'
 
-const chat = useChat()
 const emit = defineEmits(['send'])
 
 function handleSend({ text, attachments }) {
   emit('send', { text, attachments })
-}
-
-function handleQuickAction(text) {
-  if (text) {
-    emit('send', { text, attachments: [] })
-  }
 }
 </script>
 

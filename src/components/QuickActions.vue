@@ -146,7 +146,7 @@ function closePanel() {
 }
 
 function selectItem(item) {
-  emit('action', item.quickWords || '')
+  emit('action', { title: item.quickTitle || '', words: item.quickWords || '' })
   closePanel()
 }
 

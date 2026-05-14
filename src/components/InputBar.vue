@@ -42,6 +42,13 @@
 
     <!-- Input row（录音/识别时隐藏） -->
     <template v-else>
+      <!-- 快捷语 tag 展示 -->
+      <view v-if="selectedAction" class="action-tag-row">
+        <view class="action-tag">
+          <text class="action-tag-text">{{ selectedAction.title }}</text>
+          <text class="action-tag-close" @tap="selectedAction = null; inputText = ''">×</text>
+        </view>
+      </view>
       <view class="input-row">
         <textarea
           v-model="inputText"
@@ -82,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import VoiceRecorder from './VoiceRecorder.vue'
 import QuickActions from './QuickActions.vue'
 import { uploadImage, uploadAttachment, uploadAudio } from '@/utils/upload.js'
@@ -91,6 +98,13 @@ import { transcribeAudio } from '@/utils/voice.js'
 
 const emit = defineEmits(['send'])
 const inputText = ref('')
+const selectedAction = ref(null)
+watch(selectedAction, (action) => {
+  inputText.value = action?.words ?? ''
+})
+watch(inputText, (val) => {
+  if (!val && selectedAction.value) selectedAction.value = null
+})
 const attachments = ref([])
 const voiceRef = ref(null)
 const isRecording = ref(false)
@@ -335,14 +349,15 @@ function _inferMimeType(name = '') {
   return 'application/octet-stream'
 }
 
-function onQuickAction(text) {
-  inputText.value = text
+function onQuickAction(action) {
+  selectedAction.value = action
 }
 
 function handleSend() {
   if (!canSend.value) return
   emit('send', { text: inputText.value.trim(), attachments: [...attachments.value] })
   inputText.value = ''
+  selectedAction.value = null
   attachments.value = []
 }
 </script>
@@ -557,6 +572,34 @@ function handleSend() {
     transform: scale(2.2);
     opacity: 0;
   }
+}
+
+/* Action tag */
+.action-tag-row {
+  padding: 16rpx 0 0;
+}
+
+.action-tag {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 16rpx;
+  border: 2rpx solid rgba(#ef4444, 0.3);
+  border-radius: $radius-full;
+  background-color: rgba(#ef4444, 0.06);
+}
+
+.action-tag-text {
+  font-size: 22rpx;
+  color: #ef4444;
+}
+
+.action-tag-close {
+  font-size: 28rpx;
+  color: #ef4444;
+  line-height: 1;
+  padding-left: 4rpx;
 }
 
 /* Input row */

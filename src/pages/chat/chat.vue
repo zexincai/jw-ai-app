@@ -3,10 +3,22 @@
     <view class="status-bar-spacer" />
 
     <view class="topbar">
-      <view class="topbar-btn" @tap="drawerVisible = true">
-        <image src="/static/icon-menu.svg" class="topbar-icon" mode="aspectFit" />
+      <view class="topbar-btn" @tap="goLogin">
+        <image src="/static/icon-back.svg" class="topbar-icon" mode="aspectFit" />
       </view>
-      <text class="topbar-title">{{ auth.currentRole?.name || 'JClaw' }}</text>
+      <text class="topbar-title">JClaw</text>
+      <view class="topbar-todo" @tap="todoPanelType = 0">
+        <image src="/static/icon-todo.svg" class="topbar-todo-icon" mode="aspectFit" />
+        <text class="topbar-todo-label">待办</text>
+        <text v-if="todoTotalCount > 0" class="topbar-todo-badge">{{ todoTotalCount > 99 ? '99+' : todoTotalCount }}</text>
+      </view>
+    </view>
+
+    <view class="role-bar">
+      <view class="role-bar-btn" @tap="drawerVisible = true">
+        <image src="/static/icon-menu.svg" class="role-bar-icon" mode="aspectFit" />
+      </view>
+      <text class="role-bar-name">{{ currentRole?.name || '' }}</text>
     </view>
 
     <!-- 无消息时显示欢迎页 -->
@@ -16,7 +28,7 @@
     />
 
     <scroll-view
-      v-else
+      v-else-if="!drawerVisible"
       scroll-y
       class="message-list"
       :scroll-into-view="scrollTarget"
@@ -42,19 +54,22 @@
         <view id="msg-bottom" class="scroll-anchor" />
       </view>
     </scroll-view>
+    <view v-else class="message-list" />
 
     <InputBar v-if="store.activeMessages.length || store.aiReplying" @send="handleSend" />
 
-    <UsageBar v-if="store.activeMessages.length || store.aiReplying" />
-
-    <FloatingBacklogButton />
+    <BacklogPanel
+      v-if="todoPanelType !== null"
+      :message-type="todoPanelType"
+      @close="todoPanelType = null"
+    />
 
     <DrawerNav
       :visible="drawerVisible"
       :sessions="store.sessions"
       :active-session-id="store.activeSessionId"
-      :roles="auth.roles.value"
-      :active-role-id="auth.currentRoleId.value"
+      :roles="roles"
+      :active-role-id="currentRoleId"
       @close="drawerVisible = false"
       @select-session="handleSelectSession"
       @select-role="handleSelectRole"
@@ -79,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useAuth } from '@/composables/useAuth.js'
 import { useWukongIM } from '@/composables/useWukongIM.js'
@@ -87,18 +102,30 @@ import { useChat } from '@/composables/useChat.js'
 import ChatBubble from '@/components/ChatBubble.vue'
 import InputBar from '@/components/InputBar.vue'
 import DrawerNav from '@/components/DrawerNav.vue'
-import FloatingBacklogButton from '@/components/FloatingBacklogButton.vue'
+import BacklogPanel from '@/components/BacklogPanel.vue'
 import WelcomeState from '@/components/WelcomeState.vue'
-import UsageBar from '@/components/UsageBar.vue'
 import ConnectionStatusModal from '@/components/ConnectionStatusModal.vue'
 import { useBacklog } from '@/composables/useBacklog.js'
 
 const store = useChatStore()
-const auth = useAuth()
+const { token, currentRole, currentRoleId, roles, switchRole } = useAuth()
 const wkIM = useWukongIM()
 const chat = useChat()
-const backlog = useBacklog()
+const { typeItemsMap, revealedPrivateIds, isVisible, fetchTypeTotals } = useBacklog()
 const drawerVisible = ref(false)
+const todoPanelType = ref(null)
+
+const roleIdSet = computed(() => new Set(roles.value.map(role => String(role.userId))))
+const todoTotalCount = computed(() => {
+  void revealedPrivateIds.value
+  let total = 0
+  ;[0, 1, 2].forEach(type => {
+    total += (typeItemsMap.value[type] ?? []).filter(item =>
+      isVisible(item) && roleIdSet.value.has(String(item.fkUserId)),
+    ).length
+  })
+  return total
+})
 const scrollTarget = ref('')
 const switching = ref(false)
 const connectionModalVisible = ref(false)
@@ -131,12 +158,12 @@ onMounted(async () => {
     await scrollToBottom()
   }
   // Connect WUKONGIM if not already connected
-  const role = auth.currentRole.value
+  const role = currentRole.value
   if (role && wkIM.status.value !== 'connected') {
-    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+    wkIM.connect(role.userId, role.telephone, token.value).catch(() => {})
   }
   // Fetch backlog counts
-  backlog.fetchTypeTotals().catch(() => {})
+  fetchTypeTotals().catch(() => {})
 })
 
 function handleSend({ text, attachments }) {
@@ -154,11 +181,11 @@ async function handleSelectRole(id) {
   drawerVisible.value = false
   switching.value = true
   try {
-    await auth.switchRole(id)
-    const role = auth.currentRole.value
+    await switchRole(id)
+    const role = currentRole.value
     if (role) {
       wkIM.disconnect()
-      wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+      wkIM.connect(role.userId, role.telephone, token.value).catch(() => {})
     }
     await chat.loadSessions()
     if (store.sessions.length) {
@@ -182,6 +209,10 @@ function handleOpenSettings() {
   uni.navigateTo({ url: '/pages/settings/settings' })
 }
 
+function goLogin() {
+  uni.reLaunch({ url: '/pages/login/login' })
+}
+
 watch(
   () => store.wsStatus,
   (val) => {
@@ -195,9 +226,9 @@ watch(
 
 function handleReconnect() {
   connectionModalVisible.value = false
-  const role = auth.currentRole.value
+  const role = currentRole.value
   if (role) {
-    wkIM.connect(role.userId, role.telephone, auth.token.value).catch(() => {})
+    wkIM.connect(role.userId, role.telephone, token.value).catch(() => {})
   }
 }
 </script>
@@ -251,6 +282,71 @@ function handleReconnect() {
   color: $primary;
   flex: 1;
   text-align: center;
+}
+
+.topbar-todo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 16rpx;
+  border-radius: $radius-full;
+  background-color: $surface-container-lowest;
+}
+
+.topbar-todo-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.topbar-todo-label {
+  font-size: 24rpx;
+  font-weight: 500;
+  color: $on-surface;
+}
+
+.topbar-todo-badge {
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 8rpx;
+  background: #ef4444;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 700;
+  border-radius: 9999px;
+  line-height: 32rpx;
+  text-align: center;
+}
+
+.role-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  padding: 8rpx 24rpx;
+  background-color: $surface;
+  flex-shrink: 0;
+  border-bottom: 2rpx solid rgba($outline-variant, 0.2);
+}
+
+.role-bar-btn {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-full;
+}
+
+.role-bar-icon {
+  width: 36rpx;
+  height: 36rpx;
+}
+
+.role-bar-name {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: $on-surface-variant;
 }
 
 .message-list {

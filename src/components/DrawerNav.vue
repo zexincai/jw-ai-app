@@ -1,6 +1,6 @@
 <template>
   <!-- Scrim overlay -->
-  <view v-if="visible" class="drawer-overlay" @tap="emit('close')" />
+  <view v-if="visible" class="drawer-overlay" @tap="emit('close')" @touchmove.stop.prevent />
 
   <!-- Sliding panel -->
   <view class="drawer-panel" :class="visible ? 'drawer-panel--open' : ''" @tap.stop>
@@ -360,6 +360,7 @@ function onSettings()      { emit('open-settings') }
 
 .session-list {
   flex: 1;
+  height: 0;
   padding: 0 16rpx;
 }
 

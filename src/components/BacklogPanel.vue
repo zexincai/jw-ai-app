@@ -43,7 +43,7 @@
         <!-- 右侧：标签页 + 列表 -->
         <view class="blp-content">
           <!-- 标签页 -->
-          <scroll-view scroll-x class="blp-tabs" enable-flex>
+          <view class="blp-tabs">
             <view
               v-for="tab in TABS"
               :key="tab.type"
@@ -55,10 +55,9 @@
               <text
                 v-if="tabCount(tab.type) > 0"
                 class="blp-tab-badge"
-                :class="activeTab === tab.type ? 'blp-tab-badge--active' : ''"
               >{{ tabCount(tab.type) }}</text>
             </view>
-          </scroll-view>
+          </view>
 
           <!-- 列表 -->
           <scroll-view scroll-y class="blp-list">
@@ -92,7 +91,8 @@
               </view>
 
               <view v-if="visibleItems.length === 0" class="blp-empty">
-                暂无{{ activeTabLabel }}
+                <image src="/static/icon-empty.svg" class="blp-empty-icon" mode="aspectFit" />
+                <text class="blp-empty-text">暂无{{ activeTabLabel }}</text>
               </view>
             </template>
           </scroll-view>
@@ -103,7 +103,7 @@
       <view v-if="confirmVisible" class="blp-confirm-mask" @tap="cancelSwitch">
         <view class="blp-confirm-box" @tap.stop>
           <text class="blp-confirm-title">提醒</text>
-          <text class="blp-confirm-msg">确定切换到该账号下处理此待办事项？</text>
+          <text class="blp-confirm-msg">确定切换到该账号下处理此待办？</text>
           <view class="blp-confirm-btns">
             <view class="blp-confirm-cancel" @tap="cancelSwitch">取消</view>
             <view class="blp-confirm-ok" @tap="confirmSwitch">
@@ -135,10 +135,10 @@ const store = useChatStore()
 
 const ALL_TAB = -1
 const TABS = [
-  { type: 0,       label: '待办事项', color: '#4fa3e3' },
-  { type: 1,       label: '确认事项', color: '#f97316' },
-  { type: 2,       label: '提醒事项', color: '#9b59b6' },
-  { type: ALL_TAB, label: '全部',     color: '#6b7280' },
+  { type: 0,       label: '待办', color: '#4fa3e3' },
+  { type: 1,       label: '确认', color: '#f97316' },
+  { type: 2,       label: '提醒', color: '#9b59b6' },
+  { type: ALL_TAB, label: '全部', color: '#6b7280' },
 ]
 
 const activeTab = ref(props.messageType)
@@ -491,25 +491,33 @@ function cancelSwitch() {
 .blp-tabs {
   display: flex;
   flex-direction: row;
+  flex-wrap: nowrap;
   flex-shrink: 0;
-  padding: 16rpx 16rpx;
+  padding: 16rpx;
   border-bottom: 2rpx solid $outline-variant;
-  white-space: nowrap;
 }
 
 .blp-tab {
   position: relative;
-  padding: 12rpx 24rpx;
+  padding: 12rpx 0;
   border-radius: 16rpx 16rpx 0 0;
-  margin-right: 8rpx;
-  flex-shrink: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
 }
 
-.blp-tab--active {
-  background-color: $surface;
-  border: 2rpx solid $outline-variant;
-  border-bottom-color: $surface;
-  margin-bottom: -2rpx;
+.blp-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48rpx;
+  height: 4rpx;
+  background-color: $primary;
+  border-radius: 2rpx;
 }
 
 .blp-tab-label {
@@ -523,12 +531,9 @@ function cancelSwitch() {
 }
 
 .blp-tab-badge {
-  position: absolute;
-  top: -8rpx;
-  right: -4rpx;
   min-width: 28rpx;
   height: 28rpx;
-  padding: 0 4rpx;
+  padding: 0 6rpx;
   background: #ef4444;
   color: #fff;
   font-size: 18rpx;
@@ -536,12 +541,8 @@ function cancelSwitch() {
   border-radius: 9999rpx;
   line-height: 28rpx;
   text-align: center;
-  border: 2rpx solid #fff;
 }
 
-.blp-tab-badge--active {
-  background: $primary;
-}
 
 // 列表
 .blp-list {
@@ -617,8 +618,21 @@ function cancelSwitch() {
 }
 
 .blp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   padding: 80rpx 0;
-  text-align: center;
+}
+
+.blp-empty-icon {
+  width: 160rpx;
+  height: 160rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.6;
+}
+
+.blp-empty-text {
   font-size: 26rpx;
   color: $outline;
 }
